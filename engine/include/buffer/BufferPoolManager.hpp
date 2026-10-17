@@ -2,6 +2,7 @@
 
 #include "BufferFrame.hpp"
 #include "replacement/ReplacementPolicy.hpp"
+#include "metrics/MetricsCollector.hpp"
 
 #include <memory>
 #include <unordered_map>
@@ -14,6 +15,7 @@ private:
     std::unordered_map<int, int> pageTable;
 
     std::unique_ptr<ReplacementPolicy> replacementPolicy;
+    MetricsCollector* metrics;
 
     int hits;
     int misses;
@@ -22,14 +24,21 @@ private:
 public:
     BufferPoolManager(
         int poolSize,
-        std::unique_ptr<ReplacementPolicy> policy
+        std::unique_ptr<ReplacementPolicy> policy,
+        MetricsCollector* metrics = nullptr
     );
 
     int fetchPage(int pageId);
 
-    void unpinPage(int pageId);
+    bool unpinPage(int pageId, bool isDirty = false);
+
+    int accessPage(int pageId, bool isWrite = false);
 
     void markDirty(int pageId);
+
+    bool flushPage(int pageId);
+
+    void flushAllPages();
 
     int getHits() const;
 
@@ -37,5 +46,9 @@ public:
 
     int getEvictions() const;
 
+    int getPoolSize() const;
+
     const std::vector<BufferFrame>& getFrames() const;
+
+    void setMetricsCollector(MetricsCollector* m);
 };

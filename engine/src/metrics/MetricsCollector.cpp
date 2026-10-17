@@ -83,3 +83,22 @@ double MetricsCollector::getPageFaultRate() const {
     return static_cast<double>(pageFaults)
            / totalRequests;
 }
+
+double MetricsCollector::getBufferHitPercentage() const {
+    return getBufferHitRatio() * 100.0;
+}
+
+double MetricsCollector::getPageFaultPercentage() const {
+    return getPageFaultRate() * 100.0;
+}
+
+void MetricsCollector::reset() {
+    totalRequests = 0;
+    bufferHits = 0;
+    bufferMisses = 0;
+    pageFaults = 0;
+    diskReads = 0;
+    diskWrites = 0;
+    evictions = 0;
+    dirtyEvictions = 0;
+}

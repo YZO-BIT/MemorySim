@@ -2,12 +2,13 @@
 
 #include "ReplacementPolicy.hpp"
 
-#include <queue>
+#include <list>
 #include <unordered_set>
+#include <functional>
 
 class FIFO : public ReplacementPolicy {
 private:
-    std::queue<int> order;
+    std::list<int> order;
     std::unordered_set<int> present;
 
 public:
@@ -17,5 +18,9 @@ public:
 
     void remove(int frameId) override;
 
-    int evict() override;
+    int evict(const std::function<bool(int)>& isEligible) override;
+
+    int evict() override {
+        return evict([](int) { return true; });
+    }
 };

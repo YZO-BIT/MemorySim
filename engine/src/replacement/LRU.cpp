@@ -24,15 +24,19 @@ void LRU::remove(int frameId) {
     }
 }
 
-int LRU::evict() {
+int LRU::evict(const std::function<bool(int)>& isEligible) {
     if (order.empty()) {
         return -1;
     }
 
-    int victim = order.front();
+    for (auto it = order.begin(); it != order.end(); ++it) {
+        int candidate = *it;
+        if (!isEligible || isEligible(candidate)) {
+            position.erase(candidate);
+            order.erase(it);
+            return candidate;
+        }
+    }
 
-    order.pop_front();
-    position.erase(victim);
-
-    return victim;
+    return -1;
 }

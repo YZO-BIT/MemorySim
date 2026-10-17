@@ -21,4 +21,5 @@ add_executable(simulator
     src/replacement/Clock.cpp
 
     src/metrics/MetricsCollector.cpp
+    src/workload/WorkloadGenerator.cpp
 )

@@ -1,0 +1,79 @@
+const API_BASE = "http://localhost:5000/api";
+
+async function request(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  const config = {
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    ...options,
+  };
+
+  try {
+    const response = await fetch(url, config);
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = data.message || `Request failed with status ${response.status}`;
+      throw new Error(errorMsg);
+    }
+
+    return data;
+  } catch (error) {
+    if (error.name === "TypeError" && error.message.includes("fetch")) {
+      throw new Error(
+        "Could not connect to the backend server. Please verify the Express backend is running on port 5000."
+      );
+    }
+    throw error;
+  }
+}
+
+export const api = {
+  // Execute a real simulation run
+  runSimulation: (params) => {
+    return request("/simulation/run", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  // Compare LRU, FIFO, Clock on identical workload
+  compareAlgorithms: (params) => {
+    return request("/simulation/compare", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  // Retrieve historical experiments
+  getExperiments: () => {
+    return request("/experiments");
+  },
+
+  // Retrieve single experiment detail
+  getExperimentById: (id) => {
+    return request(`/experiments/${id}`);
+  },
+
+  // Check backend and engine connectivity
+  getStatus: () => {
+    return request("/status");
+  },
+
+  // Retrieve supported workload types
+  getWorkloadTypes: () => {
+    return request("/workload/types");
+  },
+
+  // Generate synthetic workload sequence
+  generateWorkload: (params) => {
+    return request("/workload/generate", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+};
+
+export default api;

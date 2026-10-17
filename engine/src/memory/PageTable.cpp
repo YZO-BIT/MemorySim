@@ -59,6 +59,22 @@ void PageTable::setReferenced(
     entries[virtualPage].referenced = value;
 }
 
+bool PageTable::isDirty(int virtualPage) const {
+    auto it = entries.find(virtualPage);
+    if (it == entries.end()) {
+        return false;
+    }
+    return it->second.dirty;
+}
+
+bool PageTable::isReferenced(int virtualPage) const {
+    auto it = entries.find(virtualPage);
+    if (it == entries.end()) {
+        return false;
+    }
+    return it->second.referenced;
+}
+
 const std::unordered_map<int, PageTableEntry>&
 PageTable::getEntries() const {
     return entries;

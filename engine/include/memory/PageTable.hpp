@@ -38,6 +38,10 @@ public:
 
     void setReferenced(int virtualPage, bool value);
 
+    bool isDirty(int virtualPage) const;
+
+    bool isReferenced(int virtualPage) const;
+
     const std::unordered_map<int, PageTableEntry>&
     getEntries() const;
 };

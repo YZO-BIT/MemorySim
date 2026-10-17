@@ -3,14 +3,30 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
+let dbConnected = false;
 
-    console.log("MongoDB Connected");
+export const isDbConnected = () => dbConnected;
+
+const connectDB = async () => {
+  const uri = process.env.MONGO_URI;
+
+  if (!uri) {
+    console.warn("[Database] MONGO_URI not configured. Running in standalone/offline mode.");
+    dbConnected = false;
+    return false;
+  }
+
+  try {
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 3000,
+    });
+    dbConnected = true;
+    console.log("[Database] MongoDB Connected successfully");
+    return true;
   } catch (error) {
-    console.log(error.message);
-    process.exit(1);
+    dbConnected = false;
+    console.warn(`[Database] MongoDB connection failed (${error.message}). Running in standalone/offline mode.`);
+    return false;
   }
 };
 

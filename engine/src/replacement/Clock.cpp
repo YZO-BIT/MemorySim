@@ -34,34 +34,39 @@ void Clock::remove(int frameId) {
     }
 }
 
-int Clock::evict() {
+int Clock::evict(const std::function<bool(int)>& isEligible) {
     if (frames.empty()) {
         return -1;
     }
 
-    while (true) {
-        hand %= frames.size();
+    size_t maxScans = frames.size() * 2 + 1;
+    size_t scanned = 0;
 
+    while (scanned < maxScans) {
+        hand %= frames.size();
         int frameId = frames[hand];
 
-        if (!referenceBit[frameId]) {
-            referenceBit.erase(frameId);
+        if (!isEligible || isEligible(frameId)) {
+            if (!referenceBit[frameId]) {
+                referenceBit.erase(frameId);
+                int victim = frameId;
+                frames.erase(frames.begin() + hand);
 
-            int victim = frameId;
+                if (!frames.empty()) {
+                    hand %= frames.size();
+                } else {
+                    hand = 0;
+                }
 
-            frames.erase(frames.begin() + hand);
-
-            if (!frames.empty()) {
-                hand %= frames.size();
-            } else {
-                hand = 0;
+                return victim;
             }
 
-            return victim;
+            referenceBit[frameId] = false;
         }
 
-        referenceBit[frameId] = false;
-
         hand = (hand + 1) % frames.size();
+        scanned++;
     }
+
+    return -1;
 }

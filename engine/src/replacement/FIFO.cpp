@@ -9,23 +9,36 @@ void FIFO::insert(int frameId) {
         return;
     }
 
-    order.push(frameId);
+    order.push_back(frameId);
     present.insert(frameId);
 }
 
 void FIFO::remove(int frameId) {
-    present.erase(frameId);
+    if (present.erase(frameId)) {
+        for (auto it = order.begin(); it != order.end(); ++it) {
+            if (*it == frameId) {
+                order.erase(it);
+                break;
+            }
+        }
+    }
 }
 
-int FIFO::evict() {
-    while (!order.empty()) {
-        int victim = order.front();
-        order.pop();
-
-        if (present.count(victim)) {
-            present.erase(victim);
-            return victim;
+int FIFO::evict(const std::function<bool(int)>& isEligible) {
+    for (auto it = order.begin(); it != order.end(); ) {
+        int candidate = *it;
+        if (!present.count(candidate)) {
+            it = order.erase(it);
+            continue;
         }
+
+        if (!isEligible || isEligible(candidate)) {
+            present.erase(candidate);
+            order.erase(it);
+            return candidate;
+        }
+
+        ++it;
     }
 
     return -1;

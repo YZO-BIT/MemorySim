@@ -18,5 +18,9 @@ public:
 
     void remove(int frameId) override;
 
-    int evict() override;
+    int evict(const std::function<bool(int)>& isEligible) override;
+
+    int evict() override {
+        return evict([](int) { return true; });
+    }
 };

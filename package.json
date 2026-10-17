@@ -1,0 +1,14 @@
+{
+  "name": "system-storage-simulator",
+  "version": "1.0.0",
+  "description": "System Storage Simulator (MemorySim) - DBMS Buffer Pool + OS Virtual Memory Simulator",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix client run dev",
+    "client": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "server": "npm --prefix server run dev",
+    "server:start": "npm --prefix server start",
+    "test": "npm --prefix server test"
+  }
+}

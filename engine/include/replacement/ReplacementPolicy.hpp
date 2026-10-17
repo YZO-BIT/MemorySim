@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 class ReplacementPolicy {
 public:
     virtual ~ReplacementPolicy() = default;
@@ -10,5 +12,9 @@ public:
 
     virtual void remove(int frameId) = 0;
 
-    virtual int evict() = 0;
-};
+    virtual int evict(const std::function<bool(int)>& isEligible) = 0;
+
+    virtual int evict() {
+        return evict([](int) { return true; });
+    }
+};

@@ -1,4 +1,4 @@
-function BufferPool({ bufferPool }) {
+function BufferPool({ bufferPool = [], algorithm = "LRU" }) {
   return (
     <div className="panel">
       <div className="panel-header">
@@ -7,7 +7,7 @@ function BufferPool({ bufferPool }) {
           <p>DBMS Memory Layer</p>
         </div>
 
-        <span className="badge">LRU</span>
+        <span className="badge">{algorithm}</span>
       </div>
 
       <div className="buffer-grid">

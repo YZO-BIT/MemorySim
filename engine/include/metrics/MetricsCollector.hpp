@@ -39,4 +39,8 @@ public:
 
     double getBufferHitRatio() const;
     double getPageFaultRate() const;
+    double getBufferHitPercentage() const;
+    double getPageFaultPercentage() const;
+
+    void reset();
 };
