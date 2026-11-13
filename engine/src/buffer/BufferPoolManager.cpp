@@ -21,9 +21,6 @@ int BufferPoolManager::fetchPage(int pageId) {
         return -1;
     }
 
-    // -------------------------
-    // BUFFER HIT
-    // -------------------------
     auto existing = pageTable.find(pageId);
     if (existing != pageTable.end()) {
         int frameId = existing->second;
@@ -41,16 +38,12 @@ int BufferPoolManager::fetchPage(int pageId) {
         return frameId;
     }
 
-    // -------------------------
-    // BUFFER MISS
-    // -------------------------
     misses++;
     if (metrics) {
         metrics->recordBufferMiss();
         metrics->recordDiskRead();
     }
 
-    // Find an empty frame first
     for (auto& frame : frames) {
         if (!frame.isValid()) {
             int frameId = frame.getFrameId();
@@ -68,9 +61,6 @@ int BufferPoolManager::fetchPage(int pageId) {
         }
     }
 
-    // -------------------------
-    // BUFFER FULL -> EVICTION
-    // -------------------------
     auto isEligible = [this](int frameId) {
         if (frameId < 0 || frameId >= static_cast<int>(frames.size())) {
             return false;

@@ -17,7 +17,7 @@
 
 struct StepFrameSnapshot {
     int frameId;
-    int pageId; // -1 if empty
+    int pageId; 
     bool dirty;
     int pinCount;
 };
@@ -25,10 +25,10 @@ struct StepFrameSnapshot {
 struct StepRecord {
     int stepNumber;
     int requestedPage;
-    std::string result; // "HIT" or "MISS"
+    std::string result;
     int frame;
-    int evictedPage; // -1 if none
-    int loadedPage; // -1 if hit
+    int evictedPage;
+    int loadedPage; 
     int runningHits;
     int runningMisses;
     int runningFaults;
@@ -144,7 +144,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Determine requests sequence
     std::vector<int> requests;
     if (!config.explicitSequence.empty()) {
         requests = config.explicitSequence;
@@ -154,7 +153,6 @@ int main(int argc, char* argv[]) {
         config.workloadType = WorkloadGenerator::typeToString(wtype);
         requests = WorkloadGenerator::generate(wtype, config.totalRequests, config.virtualPages, config.seed);
     } else {
-        // Default demo sequence
         requests = { 1, 2, 3, 1, 4, 2, 5, 1 };
         config.totalRequests = static_cast<int>(requests.size());
     }
@@ -190,7 +188,6 @@ int main(int argc, char* argv[]) {
         std::ostringstream timeStr;
         timeStr << "Step " << (step + 1);
 
-        // Snapshot frames before access to know what was in the frame before eviction
         std::vector<BufferFrame> beforeFrames = bufferPool.getFrames();
         bool wasInBuffer = false;
         int hitFrame = -1;
@@ -202,7 +199,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Buffer Pool access
         int oldEvictions = bufferPool.getEvictions();
         int bpFrame = bufferPool.accessPage(page, false);
 
@@ -243,7 +239,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Virtual Memory access
         bool wasInVm = vm.getPageTable().isPresent(page);
         int vmFrame = vm.accessPage(page, false);
 
@@ -263,7 +258,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Capture after-frames snapshot for this step
         const auto& afterFrames = bufferPool.getFrames();
         std::vector<StepFrameSnapshot> frameSnapshots;
         frameSnapshots.reserve(afterFrames.size());
@@ -311,14 +305,12 @@ int main(int argc, char* argv[]) {
                   << "    \"totalRequests\": " << config.totalRequests << "\n"
                   << "  },\n";
 
-        // Reference sequence
         std::cout << "  \"sequence\": [";
         for (size_t i = 0; i < requests.size(); ++i) {
             std::cout << requests[i] << (i + 1 < requests.size() ? ", " : "");
         }
         std::cout << "],\n";
 
-        // Buffer Pool Frames (final state)
         std::cout << "  \"bufferPool\": [\n";
         const auto& frames = bufferPool.getFrames();
         for (size_t i = 0; i < frames.size(); ++i) {
@@ -332,7 +324,6 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "  ],\n";
 
-        // Virtual Memory / Page Table (final state)
         std::cout << "  \"virtualMemory\": [\n";
         const auto& pt = vm.getPageTable();
         for (int p = 0; p < config.virtualPages; ++p) {
@@ -348,7 +339,6 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "  ],\n";
 
-        // Combined metrics
         int totalReq = config.totalRequests;
         int bufHits = bufferMetrics.getBufferHits();
         int bufMisses = bufferMetrics.getBufferMisses();
@@ -371,7 +361,6 @@ int main(int argc, char* argv[]) {
                   << "    \"executionTimeMs\": " << executionTimeMs << "\n"
                   << "  },\n";
 
-        // Per-step execution details
         std::cout << "  \"steps\": [\n";
         for (size_t s = 0; s < stepRecords.size(); ++s) {
             const auto& st = stepRecords[s];
@@ -403,7 +392,6 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "  ],\n";
 
-        // Events
         std::cout << "  \"events\": [\n";
         for (size_t i = 0; i < events.size(); ++i) {
             std::cout << "    {\n"

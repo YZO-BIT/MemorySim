@@ -27,7 +27,6 @@ int VirtualMemoryManager::accessPage(
         metrics->recordRequest();
     }
 
-    // Page already exists (Hit)
     if (pageTable.isPresent(virtualPage)) {
         int frame = pageTable.getFrame(virtualPage);
 
@@ -47,7 +46,6 @@ int VirtualMemoryManager::accessPage(
         return frame;
     }
 
-    // Page fault
     pageFaults++;
     if (metrics) {
         metrics->recordBufferMiss();
@@ -55,7 +53,6 @@ int VirtualMemoryManager::accessPage(
         metrics->recordDiskRead();
     }
 
-    // Find free physical frame
     for (int frame = 0; frame < physicalFrames; frame++) {
         if (!frameUsed[frame]) {
             frameUsed[frame] = true;
@@ -74,7 +71,6 @@ int VirtualMemoryManager::accessPage(
         }
     }
 
-    // Eviction via replacement policy
     int victimFrame = replacementPolicy ? replacementPolicy->evict() : -1;
     if (victimFrame < 0 || victimFrame >= physicalFrames) {
         return -1;

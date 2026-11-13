@@ -1,7 +1,7 @@
 #include "replacement/FIFO.hpp"
 
 void FIFO::access(int frameId) {
-    // FIFO does not change order on access.
+    
 }
 
 void FIFO::insert(int frameId) {
