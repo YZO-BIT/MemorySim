@@ -51,7 +51,6 @@ export function executeSimulation({
       );
     }
 
-    // Argument building - safe array passing to execFile without shell interpolation
     const args = [
       "--json",
       "--algo",
@@ -77,8 +76,8 @@ export function executeSimulation({
     }
 
     const options = {
-      timeout: 15000, // 15-second timeout
-      maxBuffer: 10 * 1024 * 1024, // 10MB stdout buffer
+      timeout: 15000,
+      maxBuffer: 10 * 1024 * 1024,
     };
 
     execFile(binaryPath, args, options, (error, stdout, stderr) => {

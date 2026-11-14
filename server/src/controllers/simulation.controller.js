@@ -21,7 +21,6 @@ export const runSimulation = async (req, res) => {
       seed = 42,
     } = req.body || {};
 
-    // Validation
     const normalizedAlgo = (algorithm || "").trim();
     if (!VALID_ALGORITHMS.some((a) => a.toLowerCase() === normalizedAlgo.toLowerCase())) {
       return res.status(400).json({
@@ -62,7 +61,6 @@ export const runSimulation = async (req, res) => {
       });
     }
 
-    // Generate or validate request sequence
     let finalRequests = requests;
     if (!Array.isArray(finalRequests) || finalRequests.length === 0) {
       finalRequests = generateWorkload({
@@ -73,7 +71,6 @@ export const runSimulation = async (req, res) => {
       });
     }
 
-    // Execute through C++ engine
     const engineResult = await executeSimulation({
       algorithm: normalizedAlgo,
       bufferPoolSize: bpSize,
@@ -89,7 +86,6 @@ export const runSimulation = async (req, res) => {
     let persisted = false;
     let experimentId = null;
 
-    // Optional MongoDB persistence if database is connected
     if (isDbConnected()) {
       try {
         const experimentDoc = await Experiment.create({
@@ -115,7 +111,6 @@ export const runSimulation = async (req, res) => {
         experimentId = experimentDoc._id;
         persisted = true;
 
-        // Persist events if feasible (up to 200 events to prevent massive inserts)
         if (Array.isArray(engineResult.events) && engineResult.events.length > 0) {
           const eventsToPersist = engineResult.events.slice(0, 200).map((ev) => ({
             experimentId: experimentDoc._id,
@@ -202,7 +197,6 @@ export const compareSimulation = async (req, res) => {
       executionTimeMs: res.metrics.executionTimeMs,
     }));
 
-    // Find best algorithm (lowest misses/pageFaults)
     let minMisses = Infinity;
     let best = [];
     for (const item of summary) {

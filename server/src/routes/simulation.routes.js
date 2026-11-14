@@ -3,10 +3,8 @@ import { runSimulation, compareSimulation } from "../controllers/simulation.cont
 
 const router = express.Router();
 
-// POST /api/simulation/run
 router.post("/run", runSimulation);
 
-// POST /api/simulation/compare
 router.post("/compare", compareSimulation);
 
 export default router;

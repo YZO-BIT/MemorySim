@@ -13,7 +13,6 @@ function App() {
   const [engineOnline, setEngineOnline] = useState(false);
   const [lastConfig, setLastConfig] = useState(null);
 
-  // Initialize engine status and initial live simulation
   useEffect(() => {
     let isMounted = true;
 
@@ -23,7 +22,6 @@ function App() {
         if (status.engineAvailable) {
           setEngineOnline(true);
 
-          // Run initial C++ simulation so the user is immediately greeted with real live engine results
           const initialPayload = {
             algorithm: "LRU",
             bufferPoolSize: 3,
@@ -45,7 +43,7 @@ function App() {
               }
             })
             .catch(() => {
-              // Gracefully fallback to mock preview
+              
             });
         }
       })
@@ -198,7 +196,7 @@ function App() {
             className={page === "comparison" ? "active" : ""}
             onClick={() => setPage("comparison")}
           >
-            <span>⚡</span>
+            <span>~</span>
             Compare Policies
           </button>
 

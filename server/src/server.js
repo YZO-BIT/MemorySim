@@ -15,7 +15,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Attempt database connection (graceful fallback if offline)
 connectDB();
 
 app.get("/", (req, res) => {
@@ -43,7 +42,6 @@ app.use("/api/simulation", simulationRoutes);
 app.use("/api/experiments", experimentRoutes);
 app.use("/api/workload", workloadRoutes);
 
-// Global error handler
 app.use((err, req, res, next) => {
   console.error("[Server Error]:", err);
   res.status(500).json({
@@ -54,7 +52,6 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Only start listening if run directly as the entry script
 const isMain = process.argv[1] && process.argv[1].endsWith("server.js");
 if (process.env.NODE_ENV !== "test" && isMain) {
   app.listen(PORT, () => {
