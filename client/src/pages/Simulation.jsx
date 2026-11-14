@@ -1,42 +1,29 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
 
-/**
- * Initial Simulation Setup Screen
- * Configures RAM size, frame count, input patterns (Repeating, Random, Custom),
- * and page replacement algorithms (LRU, FIFO, Clock).
- */
 function Simulation({ onSimulationComplete, onCancel }) {
-  // Memory settings
   const [frameCount, setFrameCount] = useState(4);
-  const [frameSizeKb, setFrameSizeKb] = useState(4); // 4 KB per frame
-  const [ramSizeInput, setRamSizeInput] = useState(16); // 16 KB
-  const [ramUnit, setRamUnit] = useState("KB"); // KB or MB
+  const [frameSizeKb, setFrameSizeKb] = useState(4); 
+  const [ramSizeInput, setRamSizeInput] = useState(16); 
+  const [ramUnit, setRamUnit] = useState("KB");
   const [virtualPages, setVirtualPages] = useState(10);
 
-  // Input pattern settings
-  const [patternType, setPatternType] = useState("repeating"); // "repeating", "random", "custom"
+  const [patternType, setPatternType] = useState("repeating"); 
 
-  // Repeating pattern parameters
   const [repeatBaseSequence, setRepeatBaseSequence] = useState("1, 2, 3, 4");
   const [repeatCount, setRepeatCount] = useState(3);
 
-  // Random pattern parameters
   const [randomRequestsCount, setRandomRequestsCount] = useState(16);
   const [randomSeed, setRandomSeed] = useState(42);
 
-  // Custom sequence parameters
   const [customSequence, setCustomSequence] = useState("7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2");
 
-  // Algorithm
   const [algorithm, setAlgorithm] = useState("LRU");
 
-  // Form states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Sync RAM size when frameCount or frameSizeKb changes
   useEffect(() => {
     const totalKb = frameCount * frameSizeKb;
     if (ramUnit === "MB") {
@@ -46,7 +33,6 @@ function Simulation({ onSimulationComplete, onCancel }) {
     }
   }, [frameCount, frameSizeKb, ramUnit]);
 
-  // Handle direct RAM size change
   const handleRamChange = (val, unit = ramUnit) => {
     const num = parseFloat(val);
     setRamSizeInput(val);
@@ -151,7 +137,6 @@ function Simulation({ onSimulationComplete, onCancel }) {
     setLoading(true);
 
     try {
-      // Build final reference sequence
       let finalRequests = [];
       let workloadName = "Custom Sequence";
 
@@ -174,7 +159,6 @@ function Simulation({ onSimulationComplete, onCancel }) {
         }
       } else if (patternType === "random") {
         workloadName = "Random Pattern";
-        // Let backend/C++ generate using random seed, or generate on client
         const count = Math.max(1, parseInt(randomRequestsCount, 10) || 16);
         const vPages = Math.max(1, parseInt(virtualPages, 10) || 10);
         const seedVal = parseInt(randomSeed, 10) || 42;
@@ -203,7 +187,6 @@ function Simulation({ onSimulationComplete, onCancel }) {
         }
       }
 
-      // Max requests safeguard for browser rendering
       if (finalRequests.length > 200) {
         finalRequests = finalRequests.slice(0, 200);
       }
@@ -282,7 +265,7 @@ function Simulation({ onSimulationComplete, onCancel }) {
       )}
 
       <form className="setup-form" onSubmit={handleSubmit}>
-        {/* Section 1: Memory Architecture */}
+        {}
         <div className="form-card">
           <div className="card-header">
             <span className="section-step">1</span>
@@ -383,7 +366,7 @@ function Simulation({ onSimulationComplete, onCancel }) {
           </div>
         </div>
 
-        {/* Section 2: Input / Page Reference Pattern */}
+        {}
         <div className="form-card">
           <div className="card-header">
             <span className="section-step">2</span>
@@ -537,7 +520,7 @@ function Simulation({ onSimulationComplete, onCancel }) {
           </div>
         </div>
 
-        {/* Section 3: Replacement Policy */}
+        {}
         <div className="form-card">
           <div className="card-header">
             <span className="section-step">3</span>
@@ -601,7 +584,7 @@ function Simulation({ onSimulationComplete, onCancel }) {
           </div>
         </div>
 
-        {/* Action Button */}
+        {}
         <div className="form-submit-row">
           <button
             type="submit"
@@ -614,7 +597,7 @@ function Simulation({ onSimulationComplete, onCancel }) {
                 Running C++ Simulation Engine...
               </>
             ) : (
-              "🚀 Start Simulation"
+              "Start Simulation"
             )}
           </button>
         </div>

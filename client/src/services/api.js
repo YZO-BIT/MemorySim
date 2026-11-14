@@ -31,7 +31,6 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
-  // Execute a real simulation run
   runSimulation: (params) => {
     return request("/simulation/run", {
       method: "POST",
@@ -39,7 +38,6 @@ export const api = {
     });
   },
 
-  // Compare LRU, FIFO, Clock on identical workload
   compareAlgorithms: (params) => {
     return request("/simulation/compare", {
       method: "POST",
@@ -47,27 +45,22 @@ export const api = {
     });
   },
 
-  // Retrieve historical experiments
   getExperiments: () => {
     return request("/experiments");
   },
 
-  // Retrieve single experiment detail
   getExperimentById: (id) => {
     return request(`/experiments/${id}`);
   },
 
-  // Check backend and engine connectivity
   getStatus: () => {
     return request("/status");
   },
 
-  // Retrieve supported workload types
   getWorkloadTypes: () => {
     return request("/workload/types");
   },
 
-  // Generate synthetic workload sequence
   generateWorkload: (params) => {
     return request("/workload/generate", {
       method: "POST",

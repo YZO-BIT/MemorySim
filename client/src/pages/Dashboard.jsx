@@ -25,12 +25,10 @@ function Dashboard({
   const events = simulation?.events || [];
   const frameCount = config.bufferPoolSize || config.physicalFrames || bufferPool.length || 3;
 
-  // Active step index: 0 = initial state (before any requests), 1..N = after step 1..N
   const [currentStepIndex, setCurrentStepIndex] = useState(steps.length > 0 ? 1 : 0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [activeTab, setActiveTab] = useState("timeline"); // "timeline", "history", "compare", "vm"
+  const [activeTab, setActiveTab] = useState("timeline");
 
-  // When a new simulation is loaded, reset to Step 1 (or 0)
   useEffect(() => {
     setIsPlaying(false);
     if (steps.length > 0) {
@@ -40,10 +38,8 @@ function Dashboard({
     }
   }, [simulation]);
 
-  // Derive frame state for current step
   const getDisplayFrames = () => {
     if (currentStepIndex === 0) {
-      // Step 0: All frames empty
       return Array.from({ length: frameCount }, (_, i) => ({
         frameId: i,
         pageId: null,
@@ -57,7 +53,6 @@ function Dashboard({
       return currentStepRecord.frames;
     }
 
-    // Fallback to final bufferPool
     return bufferPool.length > 0
       ? bufferPool
       : Array.from({ length: frameCount }, (_, i) => ({
@@ -109,7 +104,7 @@ function Dashboard({
             onClick={() => setActiveTab("compare")}
             title="Compare LRU, FIFO, Clock on this workload"
           >
-            ⚡ Compare Policies
+            ~ Compare Policies
           </button>
         </div>
       </div>
@@ -125,7 +120,7 @@ function Dashboard({
         </div>
       )}
 
-      {/* Playback Controls Strip */}
+      {}
       <PlaybackControls
         currentStepIndex={currentStepIndex}
         totalSteps={steps.length}
@@ -135,13 +130,13 @@ function Dashboard({
         setIsPlaying={setIsPlaying}
       />
 
-      {/* Current Step Immediate Visual Banner */}
+      {}
       <CurrentStepBanner
         currentStep={currentStep}
         totalSteps={steps.length}
       />
 
-      {/* Physical Memory / Frame Allocation Visualization */}
+      {}
       <PhysicalMemoryView
         frames={displayFrames}
         currentStep={currentStep}
@@ -149,14 +144,14 @@ function Dashboard({
         pageSize={config.pageSize || 4096}
       />
 
-      {/* Statistics Cards */}
+      {}
       <StatsCards
         config={config}
         metrics={metrics}
         currentStep={currentStep}
       />
 
-      {/* Navigation Tabs for Analytical Views */}
+      {}
       <div className="dashboard-tabs">
         <button
           type="button"
@@ -179,7 +174,7 @@ function Dashboard({
           className={`tab-btn ${activeTab === "compare" ? "active" : ""}`}
           onClick={() => setActiveTab("compare")}
         >
-          ⚡ Algorithm Comparison (LRU vs FIFO vs Clock)
+          🧠 Algorithm Comparison (LRU vs FIFO vs Clock)
         </button>
 
         <button
@@ -199,7 +194,7 @@ function Dashboard({
         </button>
       </div>
 
-      {/* Tab Panels */}
+      {}
       <div className="tab-content-area">
         {activeTab === "timeline" && (
           <FrameTimeline
