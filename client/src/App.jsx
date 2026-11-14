@@ -177,9 +177,6 @@ function App() {
           >
             <span>▦</span>
             Dashboard
-            {isLiveResult && (
-              <span className="sidebar-live-pill">LIVE</span>
-            )}
           </button>
 
           <button

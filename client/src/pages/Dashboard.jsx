@@ -6,8 +6,6 @@ import ReferenceHistoryTable from "../components/ReferenceHistoryTable";
 import FrameTimeline from "../components/FrameTimeline";
 import StatsCards from "../components/StatsCards";
 import AlgorithmComparison from "../components/AlgorithmComparison";
-import PageTable from "../components/PageTable";
-import DiskView from "../components/DiskView";
 import EventLog from "../components/EventLog";
 
 function Dashboard({
@@ -76,10 +74,6 @@ function Dashboard({
         <div>
           <div className="title-row">
             <h1>MemorySim Dashboard</h1>
-            <span className={`live-status-pill ${isLive ? "pill-live" : "pill-sample"}`}>
-              <span className="pulsing-dot"></span>
-              {isLive ? `Live Engine Run (${config.algorithm || "LRU"})` : "Sample / Standby"}
-            </span>
           </div>
           <p>
             Interactive physical memory frame allocation, step-by-step playback &amp; page replacement tracking
@@ -179,14 +173,6 @@ function Dashboard({
 
         <button
           type="button"
-          className={`tab-btn ${activeTab === "vm" ? "active" : ""}`}
-          onClick={() => setActiveTab("vm")}
-        >
-          🗂 Page Table &amp; Architecture
-        </button>
-
-        <button
-          type="button"
           className={`tab-btn ${activeTab === "events" ? "active" : ""}`}
           onClick={() => setActiveTab("events")}
         >
@@ -225,13 +211,6 @@ function Dashboard({
             defaultFrames={frameCount}
             defaultPageSize={config.pageSize || 4096}
           />
-        )}
-
-        {activeTab === "vm" && (
-          <div className="two-column">
-            <PageTable virtualMemory={virtualMemory} />
-            <DiskView diskPages={config.virtualPages || 16} />
-          </div>
         )}
 
         {activeTab === "events" && (
