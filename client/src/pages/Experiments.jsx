@@ -7,36 +7,91 @@ function Experiments({ onSelectExperiment }) {
   const [dbConnected, setDbConnected] = useState(true);
   const [error, setError] = useState(null);
   const [selectedExperiment, setSelectedExperiment] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-
+  const fetchExperiments = () => {
+    setLoading(true);
     api.getExperiments()
       .then((res) => {
-        if (!isMounted) return;
         setDbConnected(res.dbConnected !== false);
         setExperiments(Array.isArray(res.data) ? res.data : []);
       })
       .catch((err) => {
-        if (!isMounted) return;
         setError(err.message || "Could not retrieve experiments.");
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        setLoading(false);
       });
+  };
 
-    return () => {
-      isMounted = false;
-    };
+  useEffect(() => {
+    fetchExperiments();
   }, []);
+
+  const handleDelete = async (id, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this experiment?")) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      await api.deleteExperiment(id);
+      setExperiments((prev) => prev.filter((exp) => exp._id !== id));
+      if (selectedExperiment && selectedExperiment._id === id) {
+        setSelectedExperiment(null);
+      }
+    } catch (err) {
+      alert(err.message || "Failed to delete experiment.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("Are you sure you want to clear ALL experiment history? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      setClearing(true);
+      await api.clearAllExperiments();
+      setExperiments([]);
+      setSelectedExperiment(null);
+    } catch (err) {
+      alert(err.message || "Failed to clear history.");
+    } finally {
+      setClearing(false);
+    }
+  };
 
   return (
     <div className="page experiments-page">
-      <div className="page-title">
+      <div className="page-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h1>Experiment History &amp; Benchmark Archive</h1>
           <p>Historical simulation runs persisted in database storage</p>
         </div>
+        {dbConnected && experiments.length > 0 && (
+          <button
+            type="button"
+            onClick={handleClearAll}
+            disabled={clearing}
+            style={{
+              background: "rgba(239, 68, 68, 0.15)",
+              color: "#ef4444",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              borderRadius: "6px",
+              padding: "6px 14px",
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: clearing ? "not-allowed" : "pointer",
+            }}
+          >
+            {clearing ? "Clearing..." : "Clear All History"}
+          </button>
+        )}
       </div>
 
       {!dbConnected && !loading && (
@@ -82,7 +137,7 @@ function Experiments({ onSelectExperiment }) {
                   <th>References</th>
                   <th>Hits / Faults</th>
                   <th>Hit Ratio</th>
-                  <th>Action</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
 
@@ -121,14 +176,33 @@ function Experiments({ onSelectExperiment }) {
                           {exp.bufferHitRatio != null ? `${Number(exp.bufferHitRatio).toFixed(1)}%` : "—"}
                         </strong>
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn-inspect"
-                          onClick={() => setSelectedExperiment(exp)}
-                        >
-                          View Details
-                        </button>
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: "6px" }}>
+                          <button
+                            type="button"
+                            className="btn-inspect"
+                            onClick={() => setSelectedExperiment(exp)}
+                          >
+                            View Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDelete(exp._id, e)}
+                            disabled={deletingId === exp._id}
+                            style={{
+                              background: "transparent",
+                              border: "1px solid rgba(239, 68, 68, 0.3)",
+                              color: "#ef4444",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {deletingId === exp._id ? "..." : "Delete"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -139,7 +213,6 @@ function Experiments({ onSelectExperiment }) {
         </div>
       </div>
 
-      {}
       {selectedExperiment && (
         <div className="modal-backdrop" onClick={() => setSelectedExperiment(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -208,7 +281,24 @@ function Experiments({ onSelectExperiment }) {
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => handleDelete(selectedExperiment._id)}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  color: "#ef4444",
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Delete This Experiment
+              </button>
+
               <button
                 type="button"
                 className="btn-primary"

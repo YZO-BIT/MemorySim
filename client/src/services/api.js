@@ -53,6 +53,18 @@ export const api = {
     return request(`/experiments/${id}`);
   },
 
+    deleteExperiment: (id) => {
+    return request(`/experiments/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  clearAllExperiments: () => {
+    return request("/experiments", {
+      method: "DELETE",
+    });
+  },
+  
   getStatus: () => {
     return request("/status");
   },
