@@ -1,10 +1,5 @@
 import React, { useEffect, useState } from "react";
 
-/**
- * PlaybackControls
- * Controls step-by-step playback: Play, Pause, Previous, Next, Reset, Restart,
- * speed selector, and interactive progress scrubber.
- */
 function PlaybackControls({
   currentStepIndex,
   totalSteps,
@@ -13,7 +8,7 @@ function PlaybackControls({
   isPlaying,
   setIsPlaying,
 }) {
-  const [speed, setSpeed] = useState(1); // 1 = 1000ms
+  const [speed, setSpeed] = useState(1); 
 
   useEffect(() => {
     let timer = null;
@@ -36,7 +31,6 @@ function PlaybackControls({
 
   const handlePlayPause = () => {
     if (currentStepIndex >= totalSteps && !isPlaying) {
-      // Loop or restart from step 0
       onStepChange(0);
       setIsPlaying(true);
     } else {

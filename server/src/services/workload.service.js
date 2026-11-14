@@ -1,8 +1,4 @@
-/**
- * Workload generation service for synthetic page reference strings.
- */
 
-// Simple deterministic pseudo-random number generator (Mulberry32)
 function createRng(seed) {
   let s = Math.floor(seed) >>> 0;
   return function () {
@@ -59,7 +55,6 @@ export function generateWorkload({
       }
     }
   } else {
-    // Default: Uniform Random
     for (let i = 0; i < count; i++) {
       requests.push(Math.floor(rng() * pages));
     }

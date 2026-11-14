@@ -1,11 +1,5 @@
 import React, { useState } from "react";
 
-/**
- * ReferenceHistoryTable
- * Step-by-step history table tracking each page reference,
- * hit/miss outcome, affected frame, and evicted page.
- * Clicking a row jumps playback directly to that step.
- */
 function ReferenceHistoryTable({ steps = [], currentStepIndex = 0, onSelectStep }) {
   const [filter, setFilter] = useState("ALL");
 

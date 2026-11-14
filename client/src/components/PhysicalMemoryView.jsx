@@ -1,10 +1,5 @@
 import React from "react";
 
-/**
- * Physical Memory / Frame Allocation Visualization
- * Displays all configured frames, showing which page occupies each frame at the current step,
- * whether the frame is empty/occupied, and visual highlights for loads, replacements, and hits.
- */
 function PhysicalMemoryView({
   frames = [],
   currentStep = null,

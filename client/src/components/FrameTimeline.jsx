@@ -1,13 +1,5 @@
 import React from "react";
 
-/**
- * FrameTimeline
- * A 2D matrix/grid illustrating memory residency over time.
- * Rows = simulation steps; Columns = physical frames.
- * The cell that changed (loaded/replaced/hit) in that step is highlighted.
- * The active playback step is highlighted with a distinct row accent.
- * Clicking a row jumps playback to that step.
- */
 function FrameTimeline({
   steps = [],
   frameCount = 3,

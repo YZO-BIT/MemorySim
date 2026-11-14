@@ -71,7 +71,7 @@ function Dashboard({
 
   return (
     <div className="page dashboard-page">
-      {/* Top Header */}
+      {}
       <div className="page-title dashboard-header">
         <div>
           <div className="title-row">

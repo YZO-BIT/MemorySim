@@ -14,15 +14,11 @@ const seedDatabase = async () => {
 
     console.log("Connected to MongoDB Atlas");
 
-    // Clear existing sample data
     await Page.deleteMany({});
     await Experiment.deleteMany({});
     await Workload.deleteMany({});
     await SimulationEvent.deleteMany({});
-
-    // ==========================================
-    // 1. PAGES
-    // ==========================================
+    
 
     const pages = await Page.insertMany([
       {
@@ -79,9 +75,6 @@ const seedDatabase = async () => {
 
     console.log(`Inserted ${pages.length} pages`);
 
-    // ==========================================
-    // 2. WORKLOAD
-    // ==========================================
 
     const workload = await Workload.create({
       name: "Sample Locality Workload",
@@ -103,9 +96,6 @@ const seedDatabase = async () => {
 
     console.log("Inserted workload");
 
-    // ==========================================
-    // 3. EXPERIMENT
-    // ==========================================
 
     const experiment = await Experiment.create({
       algorithm: "LRU",
@@ -135,10 +125,6 @@ const seedDatabase = async () => {
     });
 
     console.log("Inserted experiment");
-
-    // ==========================================
-    // 4. SIMULATION EVENTS
-    // ==========================================
 
     const events = [
       {

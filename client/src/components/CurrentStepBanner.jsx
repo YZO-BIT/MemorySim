@@ -1,11 +1,5 @@
 import React from "react";
 
-/**
- * CurrentStepBanner
- * Displays immediate feedback for the current page request:
- * Requested Page, HIT / MISS result, Affected Frame, Evicted / Loaded Page,
- * and running hit ratio.
- */
 function CurrentStepBanner({ currentStep, totalSteps = 0 }) {
   if (!currentStep) {
     return (

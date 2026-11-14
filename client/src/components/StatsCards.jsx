@@ -1,9 +1,5 @@
 import React from "react";
 
-/**
- * StatsCards
- * Displays live counters and ratios calculated safely from current step or final run.
- */
 function StatsCards({ config = {}, metrics = {}, currentStep = null }) {
   const totalReq = currentStep ? currentStep.step : metrics.totalRequests || 0;
   const hits = currentStep ? currentStep.runningHits : metrics.bufferHits || 0;

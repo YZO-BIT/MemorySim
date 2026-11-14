@@ -139,7 +139,7 @@ function Experiments({ onSelectExperiment }) {
         </div>
       </div>
 
-      {/* Experiment Details Modal */}
+      {}
       {selectedExperiment && (
         <div className="modal-backdrop" onClick={() => setSelectedExperiment(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>

@@ -1,11 +1,6 @@
 import React, { useState } from "react";
 import api from "../services/api";
 
-/**
- * AlgorithmComparison
- * Compares LRU, FIFO, and Clock using the exact same page reference sequence and frame count.
- * All results are computed by the C++ engine via POST /api/simulation/compare.
- */
 function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSize = 4096 }) {
   const [frames, setFrames] = useState(defaultFrames);
   const [sequenceInput, setSequenceInput] = useState(
