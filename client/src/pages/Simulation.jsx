@@ -4,7 +4,7 @@ import api from "../services/api";
 /**
  * Initial Simulation Setup Screen
  * Configures RAM size, frame count, input patterns (Repeating, Random, Custom),
- * and page replacement algorithms (LRU, FIFO, Clock).
+ * and page replacement algorithms (LRU, FIFO, Clock, Optimal).
  */
 function Simulation({ onSimulationComplete, onCancel }) {
   // Memory settings
@@ -30,6 +30,9 @@ function Simulation({ onSimulationComplete, onCancel }) {
 
   // Algorithm
   const [algorithm, setAlgorithm] = useState("LRU");
+
+  // Write ratio: percentage of requests that are writes (deterministic from seed)
+  const [writeRatio, setWriteRatio] = useState(0);
 
   // Form states
   const [loading, setLoading] = useState(false);
@@ -126,6 +129,9 @@ function Simulation({ onSimulationComplete, onCancel }) {
       if (!randomRequestsCount || randomRequestsCount < 1 || randomRequestsCount > 500) {
         errors.randomRequests = "Number of requests must be between 1 and 500.";
       }
+      if (randomSeed !== "" && Number.isNaN(parseInt(randomSeed, 10))) {
+        errors.randomSeed = "Seed must be an integer (0 is a valid seed).";
+      }
     } else if (patternType === "custom") {
       const parts = customSequence
         .split(/[,;\s]+/)
@@ -177,7 +183,8 @@ function Simulation({ onSimulationComplete, onCancel }) {
         // Let backend/C++ generate using random seed, or generate on client
         const count = Math.max(1, parseInt(randomRequestsCount, 10) || 16);
         const vPages = Math.max(1, parseInt(virtualPages, 10) || 10);
-        const seedVal = parseInt(randomSeed, 10) || 42;
+        const parsedSeed = parseInt(randomSeed, 10);
+        const seedVal = Number.isNaN(parsedSeed) ? 42 : parsedSeed;
 
         const genRes = await api.generateWorkload({
           type: "Random",
@@ -217,7 +224,8 @@ function Simulation({ onSimulationComplete, onCancel }) {
         workloadType: workloadName,
         totalRequests: finalRequests.length,
         requests: finalRequests,
-        seed: parseInt(randomSeed, 10) || 42,
+        seed: Number.isNaN(parseInt(randomSeed, 10)) ? 42 : parseInt(randomSeed, 10),
+        writeRatio,
       };
 
       const result = await api.runSimulation(payload);
@@ -598,6 +606,41 @@ function Simulation({ onSimulationComplete, onCancel }) {
                 <span className="algo-badge">Hardware Friendly LRU Approx</span>
               </div>
             </label>
+
+            <label className={`algo-card ${algorithm === "OPT" ? "active" : ""}`}>
+              <input
+                type="radio"
+                name="algorithm"
+                value="OPT"
+                checked={algorithm === "OPT"}
+                onChange={() => setAlgorithm("OPT")}
+              />
+              <div className="algo-card-body">
+                <span className="algo-name">Optimal (Belady)</span>
+                <p>
+                  Evicts the page whose next use is farthest in the future. Needs future knowledge, so it serves as the theoretical lower bound for faults.
+                </p>
+                <span className="algo-badge">Theoretical Benchmark</span>
+              </div>
+            </label>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="writeRatio">Write Ratio</label>
+            <select
+              id="writeRatio"
+              value={writeRatio}
+              onChange={(e) => setWriteRatio(parseInt(e.target.value, 10))}
+            >
+              <option value={0}>0% writes (read-only)</option>
+              <option value={10}>10% writes</option>
+              <option value={30}>30% writes</option>
+              <option value={50}>50% writes</option>
+              <option value={100}>100% writes</option>
+            </select>
+            <span className="field-hint">
+              Share of requests issued as writes; assignment is deterministic and derived from the seed. Writes dirty pages, and dirty evictions trigger disk write-backs.
+            </span>
           </div>
         </div>
 

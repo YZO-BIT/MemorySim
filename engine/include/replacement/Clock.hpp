@@ -2,16 +2,20 @@
 
 #include "ReplacementPolicy.hpp"
 
+#include <cstddef>
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
 class Clock : public ReplacementPolicy {
 private:
-    std::vector<int> frames;
+    std::vector<int> ring;
+
+    std::unordered_map<int, std::size_t> indexOf;
 
     std::unordered_map<int, bool> referenceBit;
 
-    int hand;
+    std::size_t hand;
 
 public:
     Clock();
@@ -27,4 +31,10 @@ public:
     int evict() override {
         return evict([](int) { return true; });
     }
+
+    bool isResident(int frameId) const;
+
+    bool isReferenced(int frameId) const;
+
+    std::size_t residentCount() const;
 };

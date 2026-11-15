@@ -44,7 +44,7 @@ function PhysicalMemoryView({
           if (isCurrentTarget) {
             if (isHit) {
               highlightClass = "frame-hit-glow";
-              actionBadge = <span className="frame-action-badge badge-hit">✓ HIT (In-Memory)</span>;
+              actionBadge = <span className="frame-action-badge badge-hit">HIT (In-Memory)</span>;
             } else if (isEviction) {
               highlightClass = "frame-evict-glow";
               actionBadge = (

@@ -1,16 +1,17 @@
 import React from "react";
+import { IconPause, IconCheck, IconAlert } from "./icons";
 
 /**
  * CurrentStepBanner
  * Displays immediate feedback for the current page request:
  * Requested Page, HIT / MISS result, Affected Frame, Evicted / Loaded Page,
- * and running hit ratio.
+ * and running hit ratio. Running Faults counts virtual-memory page faults.
  */
 function CurrentStepBanner({ currentStep, totalSteps = 0 }) {
   if (!currentStep) {
     return (
       <div className="current-step-banner banner-standby">
-        <div className="banner-icon">⏸</div>
+        <div className="banner-icon"><IconPause size={16} /></div>
         <div className="banner-content">
           <strong>Initial Memory State (Step 0)</strong>
           <p>Simulation ready. Press Play or Next Step to begin referencing pages.</p>
@@ -35,9 +36,9 @@ function CurrentStepBanner({ currentStep, totalSteps = 0 }) {
 
         <div className="banner-outcome">
           <div className={`result-tag ${isHit ? "result-hit" : "result-miss"}`}>
-            <span className="result-icon">{isHit ? "✓" : "⚠"}</span>
+            <span className="result-icon">{isHit ? <IconCheck size={14} /> : <IconAlert size={14} />}</span>
             <div className="result-text-group">
-              <span className="result-title">{isHit ? "PAGE HIT" : "PAGE FAULT / MISS"}</span>
+              <span className="result-title">{isHit ? "PAGE HIT" : "BUFFER MISS"}</span>
               <span className="result-detail">
                 {isHit
                   ? `Located in Frame ${currentStep.frame} — Zero disk I/O latency`
@@ -56,7 +57,9 @@ function CurrentStepBanner({ currentStep, totalSteps = 0 }) {
           </div>
           <div className="running-stat-item">
             <span>Running Faults</span>
-            <strong className="text-red">{currentStep.runningMisses}</strong>
+            <strong className="text-red">
+              {currentStep.runningFaults ?? currentStep.runningMisses}
+            </strong>
           </div>
           <div className="running-stat-item">
             <span>Running Hit Ratio</span>

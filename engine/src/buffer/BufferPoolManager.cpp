@@ -21,6 +21,11 @@ int BufferPoolManager::fetchPage(int pageId) {
         return -1;
     }
 
+    // Lookahead policies must observe the request regardless of hit/miss.
+    if (replacementPolicy) {
+        replacementPolicy->notifyRequest(pageId);
+    }
+
     // -------------------------
     // BUFFER HIT
     // -------------------------
@@ -47,7 +52,6 @@ int BufferPoolManager::fetchPage(int pageId) {
     misses++;
     if (metrics) {
         metrics->recordBufferMiss();
-        metrics->recordDiskRead();
     }
 
     // Find an empty frame first
@@ -58,6 +62,10 @@ int BufferPoolManager::fetchPage(int pageId) {
 
             frame.loadPage(page);
             pageTable[pageId] = frameId;
+
+            if (metrics) {
+                metrics->recordDiskRead();
+            }
 
             if (replacementPolicy) {
                 replacementPolicy->insert(frameId);
@@ -107,6 +115,10 @@ int BufferPoolManager::fetchPage(int pageId) {
     BufferPage page(pageId, "Page " + std::to_string(pageId));
     victimFrame.loadPage(page);
     pageTable[pageId] = victim;
+
+    if (metrics) {
+        metrics->recordDiskRead();
+    }
 
     if (replacementPolicy) {
         replacementPolicy->insert(victim);
@@ -201,4 +213,10 @@ const std::vector<BufferFrame>& BufferPoolManager::getFrames() const {
 
 void BufferPoolManager::setMetricsCollector(MetricsCollector* m) {
     metrics = m;
+}
+
+void BufferPoolManager::setReferenceSequence(const std::vector<int>& requests) {
+    if (replacementPolicy) {
+        replacementPolicy->setReferenceSequence(requests);
+    }
 }

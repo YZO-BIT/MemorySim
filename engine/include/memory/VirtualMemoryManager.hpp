@@ -45,4 +45,7 @@ public:
     void setMetricsCollector(MetricsCollector* m);
 
     void setReplacementPolicy(std::unique_ptr<ReplacementPolicy> policy);
+
+    // Forwards the full reference sequence to lookahead policies (e.g. OPT).
+    void setReferenceSequence(const std::vector<int>& requests);
 };

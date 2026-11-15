@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { IconReset, IconPrev, IconPlay, IconPause, IconNext } from "./icons";
 
 /**
  * PlaybackControls
@@ -71,7 +72,8 @@ function PlaybackControls({
             onClick={handleReset}
             title="Reset to initial state (Step 0)"
           >
-            ⏮ Reset
+            <IconReset size={13} />
+            Reset
           </button>
 
           <button
@@ -81,7 +83,7 @@ function PlaybackControls({
             disabled={currentStepIndex <= 0}
             title="Step Backward"
           >
-            ◀ Prev
+            <IconPrev size={13} />
           </button>
 
           <button
@@ -90,7 +92,8 @@ function PlaybackControls({
             onClick={handlePlayPause}
             title={isPlaying ? "Pause Simulation" : "Auto-Play Simulation"}
           >
-            {isPlaying ? "⏸ Pause" : currentStepIndex >= totalSteps ? "↻ Replay" : "▶ Play"}
+            {isPlaying ? <IconPause size={13} /> : <IconPlay size={13} />}
+            {isPlaying ? "Pause" : currentStepIndex >= totalSteps ? "Replay" : "Play"}
           </button>
 
           <button
@@ -100,7 +103,8 @@ function PlaybackControls({
             disabled={currentStepIndex >= totalSteps}
             title="Step Forward"
           >
-            Next ▶
+            Next
+            <IconNext size={13} />
           </button>
 
           {onRestart && (
@@ -113,7 +117,8 @@ function PlaybackControls({
               }}
               title="Restart simulation with same configuration"
             >
-              ⟳ Re-run
+              <IconReset size={13} />
+              Re-run
             </button>
           )}
         </div>

@@ -39,6 +39,7 @@ export function executeSimulation({
   totalRequests = 10,
   requests = [],
   seed = 42,
+  writeRatio = 0,
 }) {
   return new Promise((resolve, reject) => {
     const binaryPath = getEngineBinaryPath();
@@ -52,6 +53,7 @@ export function executeSimulation({
     }
 
     // Argument building - safe array passing to execFile without shell interpolation
+    const parsedSeed = parseInt(seed, 10);
     const args = [
       "--json",
       "--algo",
@@ -67,7 +69,10 @@ export function executeSimulation({
       "--workload",
       String(workloadType || "Random"),
       "--seed",
-      String(parseInt(seed, 10) || 42),
+      // Preserve seed 0; only fall back when parsing fails.
+      String(Number.isNaN(parsedSeed) ? 42 : parsedSeed),
+      "--write-ratio",
+      String(Math.min(100, Math.max(0, Math.round(Number(writeRatio) || 0)))),
     ];
 
     if (Array.isArray(requests) && requests.length > 0) {
@@ -78,7 +83,9 @@ export function executeSimulation({
 
     const options = {
       timeout: 15000, // 15-second timeout
-      maxBuffer: 10 * 1024 * 1024, // 10MB stdout buffer
+      // 256MB stdout buffer: bounded step JSON (1000 steps) stays well below
+      // this even for large frame counts.
+      maxBuffer: 256 * 1024 * 1024,
     };
 
     execFile(binaryPath, args, options, (error, stdout, stderr) => {

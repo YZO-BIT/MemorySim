@@ -60,8 +60,10 @@
 Disk storage is persistent but slow (milliseconds for magnetic disks, tens of microseconds for NVMe SSDs). Main memory (DRAM) is fast (50–100 nanoseconds) but volatile and limited in capacity. Therefore, all high-performance systems—whether a relational database like PostgreSQL or the Linux kernel—depend entirely on intelligent caching and replacement strategies to minimize disk I/O.
 
 MemorySim models this interaction through a **Dual-Layer Architecture**:
-1. **DBMS Buffer Pool Manager:** Simulates page caching, buffer frame tracking, pin/unpin concurrency counts, dirty page flushing, and victim selection algorithms (**LRU**, **FIFO**, **Clock**).
+1. **DBMS Buffer Pool Manager:** Simulates page caching, buffer frame tracking, pin/unpin concurrency counts, dirty page flushing, and victim selection algorithms (**LRU**, **FIFO**, **Clock**, **Optimal/Belady**).
 2. **OS Virtual Memory Manager:** Simulates virtual address spaces, page tables with PTE flags (Present, Dirty, Referenced), hardware page faults, and physical frame remapping.
+
+Both layers process the same reference sequence and the same deterministic read/write mask; all metrics (hits, misses, faults, evictions, disk I/O) are tracked **separately per layer** — buffer-pool misses and virtual-memory page faults are never conflated.
 
 ## The Storage Hierarchy & The I/O Bottleneck
 In a database system, disk I/O is the dominant performance bottleneck:
@@ -106,10 +108,15 @@ A single disk access takes the time of **100,000 to 1,000,000 CPU cycles**. The 
 |  - LRU (Doubly-Linked List + Map)                 - Sequential                    |
 |  - FIFO (Queue + Set)                             - Random                        |
 |  - Clock (Circular Sweep with Reference Bit)      - High Locality (80/20)         |
-|  - Pinned-Frame isEligible Predicate Protection   - Mixed                         |
+|  - OPT (Belady: farthest next use)                - Mixed                         |
+|  - Pinned-Frame isEligible Predicate Protection   - Repeating (cyclic loop)       |
+|                                                   - Deterministic Write Ratio     |
+|                                                     (Mulberry32 write mask)       |
 |                                                                                   |
 |  [Metrics Collector]                                                              |
-|  - Total Requests, Hits, Misses, Faults, Evictions, Disk Reads & Writes           |
+|  - Per-layer: requests, hits, misses, hit/miss ratios, faults, fault rates,       |
+|    evictions, dirty evictions, disk reads & writes (buffer pool AND virtual       |
+|    memory tracked independently)                                                  |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -127,11 +134,12 @@ A single disk access takes the time of **100,000 to 1,000,000 CPU cycles**. The 
 7. **Frontend Visualization:** [App.jsx](file:///d:/System-Storage-Simulator/client/src/App.jsx) and [Dashboard.jsx](file:///d:/System-Storage-Simulator/client/src/pages/Dashboard.jsx) update the live view, rendering updated buffer frames, virtual page mappings, metrics, and step-by-step event logs.
 
 ## Current Implementation Status
-- **Overall Completion:** **~77%** (significantly advanced from initial 24% baseline).
-- **C++ Engine:** **85% Complete** (LRU, FIFO, Clock, BufferPool, VMM, PageTable, Metrics, Workload Generator, CLI JSON).
-- **Backend & Database:** **75% Complete** (REST endpoints, execFile runner, validation, offline MongoDB fallback, automated test suite).
-- **Frontend UI:** **70% Complete** (Connected API, form submission, live dashboard views, experiments table, Vite production build passing).
-- **Testing & Verification:** **75% Complete** (22 automated tests: 9 C++ unit tests, 12 Node.js API integration tests, 1 frontend build).
+Verified at the end of Phase 5 (final verification). Actual verified state:
+
+- **C++ Engine:** Complete and verified — LRU, FIFO, Clock, OPT (Belady); pinned-frame protection; dirty-page write-back; layer-separated metrics; five deterministic workload types (Mulberry32, identical to the backend generator); write-ratio support (0–100%); seed-0 support; strict CLI validation; bounded JSON step/event emission (1000 steps / 5000 events, truncation flagged). **1768 automated checks pass** (also clean under ASan + UBSan).
+- **Backend & Database:** Complete and verified offline — validated `/run`, `/compare` (4 algorithms), `/workload/generate`, `/experiments`; deterministic workload service; reference-sequence persistence schema; **30 automated tests pass** (with the engine available). MongoDB persistence and DB-backed replay are implemented but **NOT VERIFIED** (no MongoDB server available in the verification environment).
+- **Frontend UI:** Complete and verified at build level — connected API, four-algorithm comparison, write-ratio selector, playback controls, history table with read/write column, exact-replay limitation messaging. Oxlint clean; Vite production build passes. Interactive browser verification was **NOT RUN** (no browser automation available in the environment).
+- **Historical replay:** exact replay works when an experiment stores its original `referenceSequence`; legacy experiments without stored sequences show an explicit "Exact Replay Unavailable" state (verified in code + offline paths; DB retrieval itself NOT VERIFIED).
 
 ---
 
@@ -148,10 +156,13 @@ A single disk access takes the time of **100,000 to 1,000,000 CPU cycles**. The 
 | **LRU Replacement** | Discards least recently used frame using $O(1)$ Doubly-Linked List + Hash Map iterators. | [LRU.hpp](file:///d:/System-Storage-Simulator/engine/include/replacement/LRU.hpp)<br>[LRU.cpp](file:///d:/System-Storage-Simulator/engine/src/replacement/LRU.cpp) |
 | **FIFO Replacement** | Discards oldest loaded frame in arrival order using a queue and set. | [FIFO.hpp](file:///d:/System-Storage-Simulator/engine/include/replacement/FIFO.hpp)<br>[FIFO.cpp](file:///d:/System-Storage-Simulator/engine/src/replacement/FIFO.cpp) |
 | **Clock (Second-Chance)** | Approximates LRU using a circular scan and reference bits, clearing bits on sweep before choosing victim. | [Clock.hpp](file:///d:/System-Storage-Simulator/engine/include/replacement/Clock.hpp)<br>[Clock.cpp](file:///d:/System-Storage-Simulator/engine/src/replacement/Clock.cpp) |
+| **Optimal (Belady) Replacement** | Evicts the page whose next use is farthest in the future; theoretical lower bound on faults. Requires future knowledge. | [Optimal.hpp](file:///d:/System-Storage-Simulator/engine/include/replacement/Optimal.hpp)<br>[Optimal.cpp](file:///d:/System-Storage-Simulator/engine/src/replacement/Optimal.cpp) |
 | **Pinned Frame Protection** | `isEligible` predicate passed to policies ensures pinned frames cannot be evicted, preventing policy corruption. | [ReplacementPolicy.hpp:L12-L16](file:///d:/System-Storage-Simulator/engine/include/replacement/ReplacementPolicy.hpp#L12-L16)<br>[BufferPoolManager.cpp:L64-L75](file:///d:/System-Storage-Simulator/engine/src/buffer/BufferPoolManager.cpp#L64-L75) |
-| **Synthetic Database Workloads** | Models sequential table scans, point lookups (random), B+ tree hot sets (80/20 locality), and mixed queries. | [WorkloadGenerator.hpp](file:///d:/System-Storage-Simulator/engine/include/workload/WorkloadGenerator.hpp)<br>[WorkloadGenerator.cpp](file:///d:/System-Storage-Simulator/engine/src/workload/WorkloadGenerator.cpp)<br>[workload.service.js](file:///d:/System-Storage-Simulator/server/src/services/workload.service.js) |
-| **Storage Performance Metrics** | Hit ratios, fault rates, disk reads on cache misses, disk writes on dirty evictions. | [MetricsCollector.hpp](file:///d:/System-Storage-Simulator/engine/include/metrics/MetricsCollector.hpp)<br>[MetricsCollector.cpp](file:///d:/System-Storage-Simulator/engine/src/metrics/MetricsCollector.cpp) |
-| **Process Isolation & REST Gateway** | Spawns compiled C++ executable with strict timeouts and buffer caps; provides JSON REST API. | [simulator.service.js](file:///d:/System-Storage-Simulator/server/src/services/simulator.service.js)<br>[server.js](file:///d:/System-Storage-Simulator/server/src/server.js) |
+| **Synthetic Database Workloads** | Five deterministic workload types (Sequential, Random, High Locality 80/20, Mixed, Repeating) plus a deterministic read/write ratio (Bernoulli mask from an independent Mulberry32 stream). Engine and backend generate bit-identical sequences for the same seed. | [WorkloadGenerator.hpp](file:///d:/System-Storage-Simulator/engine/include/workload/WorkloadGenerator.hpp)<br>[WorkloadGenerator.cpp](file:///d:/System-Storage-Simulator/engine/src/workload/WorkloadGenerator.cpp)<br>[workload.service.js](file:///d:/System-Storage-Simulator/server/src/services/workload.service.js) |
+| **Storage Performance Metrics** | Tracked **separately per layer**: buffer-pool hits/misses/hit-ratio/disk-reads/disk-writes/evictions/dirty-evictions, and virtual-memory hits/faults/fault-rate/disk I/O/evictions. Combined legacy fields are additive sums. A buffer miss is not a page fault. | [MetricsCollector.hpp](file:///d:/System-Storage-Simulator/engine/include/metrics/MetricsCollector.hpp)<br>[MetricsCollector.cpp](file:///d:/System-Storage-Simulator/engine/src/metrics/MetricsCollector.cpp) |
+| **Input Validation & Data Integrity** | Strict integer/range validation for algorithm, sizes, seeds (0 preserved), write ratio (0–100) and reference sequences (bounded, in-range); `/run` and `/compare` share one validation service; workload generation endpoint rejects unknown types. | [simulation-validation.service.js](file:///d:/System-Storage-Simulator/server/src/services/simulation-validation.service.js) |
+| **Historical Replay** | Experiments persist the original reference sequence, seed and write ratio; replay re-executes the exact stored sequence. Legacy experiments without stored sequences display an "Exact Replay Unavailable" state instead of silently regenerating data. | [simulation.controller.js](file:///d:/System-Storage-Simulator/server/src/controllers/simulation.controller.js)<br>[App.jsx](file:///d:/System-Storage-Simulator/client/src/App.jsx) |
+| **Process Isolation & REST Gateway** | Spawns compiled C++ executable with strict timeout (15 s), 256 MB stdout buffer, and bounded JSON step/event emission (1000 steps / 5000 events, truncation flagged; metrics always cover the full run); provides JSON REST API. | [simulator.service.js](file:///d:/System-Storage-Simulator/server/src/services/simulator.service.js)<br>[server.js](file:///d:/System-Storage-Simulator/server/src/server.js)<br>[main.cpp](file:///d:/System-Storage-Simulator/engine/src/main.cpp) |
 | **Graceful Offline Database** | Server checks MongoDB with 3s timeout; if unavailable, falls back to standalone simulation without crashing. | [mongodb.js](file:///d:/System-Storage-Simulator/server/src/database/mongodb.js) |
 | **Live UI Data Binding** | Real-time React 19 dashboard updating buffer frames, virtual page table rows, and metrics from engine JSON. | [App.jsx](file:///d:/System-Storage-Simulator/client/src/App.jsx)<br>[Dashboard.jsx](file:///d:/System-Storage-Simulator/client/src/pages/Dashboard.jsx)<br>[Simulation.jsx](file:///d:/System-Storage-Simulator/client/src/pages/Simulation.jsx) |
 
@@ -424,121 +435,137 @@ In 64-bit architectures, a flat page table would require millions of gigabytes o
 # Part 5: Step-by-Step Practical Guide & Verification Results
 
 ## Prerequisites
-- **C++ Compiler:** `g++` with C++20 support (MSYS2 MinGW-w64 on Windows or GCC 10+ on Linux).
-- **Node.js:** Node.js v18.0.0 or higher.
-- **npm:** Package manager included with Node.js.
+- **C++ Compiler:** GCC 10+ with C++20 support (verified with GCC 15.2.0 under WSL; a native Windows MinGW toolchain also works if it can compile C++20).
+- **CMake:** 3.16+ (verified with CMake 4.4.5).
+- **Node.js:** Node.js v18.0.0 or higher (verified with v22.20.0).
+- **MongoDB (optional):** Needed only for experiment persistence/history; the server runs gracefully without it.
 
----
+## Compiling C++ Simulation Engine (CMake — recommended)
 
-## Compiling C++ Simulation Engine
-
-```powershell
-g++ -std=c++20 -I engine/include `
-  engine/src/main.cpp `
-  engine/src/buffer/BufferPoolManager.cpp `
-  engine/src/memory/PageTable.cpp `
-  engine/src/memory/VirtualMemoryManager.cpp `
-  engine/src/metrics/MetricsCollector.cpp `
-  engine/src/workload/WorkloadGenerator.cpp `
-  engine/src/replacement/LRU.cpp `
-  engine/src/replacement/FIFO.cpp `
-  engine/src/replacement/Clock.cpp `
-  -o engine/simulator.exe
+```bash
+cmake -S engine -B engine/build
+cmake --build engine/build
+# Binaries: engine/build/simulator and engine/build/engine_tests
 ```
 
 ### CLI Execution Modes
 1. **JSON Output Mode (Used by Backend API):**
-   ```powershell
-   & "engine/simulator.exe" --json --algo LRU --frames 3 --sequence 1,2,3,1,4,2,5,1
+   ```bash
+   ./engine/build/simulator --json --algo LRU --frames 3 --sequence 1,2,3,1,4,2,5,1
    ```
 2. **Human-Readable Terminal Mode:**
-   ```powershell
-   & "engine/simulator.exe" --algo LRU --frames 3 --requests 10 --workload HighLocality
+   ```bash
+   ./engine/build/simulator --algo LRU --frames 3 --requests 10 --workload HighLocality
    ```
 
----
+Full CLI options: `--algo <LRU|FIFO|Clock|OPT>`, `--buffer-size`, `--virtual-pages`,
+`--physical-frames`, `--page-size`, `--workload <Sequential|Random|HighLocality|Mixed|Repeating>`,
+`--requests`, `--seed`, `--write-ratio <0-100>`, `--sequence <p1,p2,...>`, `--json`.
+Unknown options, invalid write ratios, invalid sequence tokens and unknown workload
+types are rejected with exit code 1.
 
 ## Running Automated C++ Tests
-```powershell
-g++ -std=c++20 -I engine/include `
-  engine/tests/engine_test.cpp `
-  engine/src/buffer/BufferPoolManager.cpp `
-  engine/src/memory/PageTable.cpp `
-  engine/src/memory/VirtualMemoryManager.cpp `
-  engine/src/metrics/MetricsCollector.cpp `
-  engine/src/workload/WorkloadGenerator.cpp `
-  engine/src/replacement/LRU.cpp `
-  engine/src/replacement/FIFO.cpp `
-  engine/src/replacement/Clock.cpp `
-  -o engine/tests/engine_test.exe
-
-& "engine/tests/engine_test.exe"
+```bash
+ctest --test-dir engine/build --output-on-failure
+# or directly:
+./engine/build/engine_tests
 ```
-*Output:*
+*Verified output:*
 ```text
-Running C++ Engine Automated Tests...
-[PASS] test_lru_victim_selection
-[PASS] test_fifo_victim_selection
-[PASS] test_clock_second_chance
-[PASS] test_pinned_frame_protection
-[PASS] test_all_frames_pinned
-[PASS] test_dirty_page_eviction
-[PASS] test_virtual_memory_eviction
-[PASS] test_workload_generator_deterministic
-[PASS] test_invalid_inputs
-All C++ Engine Tests Passed Successfully!
+1768 checks, 0 failed
+ALL TESTS PASSED
 ```
-
----
+The suite also passes with AddressSanitizer + UBSan (`-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"`).
 
 ## Running Backend Server & Tests
-Navigate to `server/`:
-```powershell
+```bash
 cd server
-npm.cmd test
+npm install
+ENGINE_PATH=<absolute path to the engine binary> npm test
 ```
-*Output:*
+`ENGINE_PATH` is required (tests execute the real engine binary). *Verified output:*
 ```text
-✔ API: GET /api/status returns engine availability (19.7ms)
-✔ API: POST /api/simulation/run executes C++ simulation and returns valid results (29.2ms)
-✔ API: POST /api/simulation/run rejects invalid algorithm with 400 (3.0ms)
-✔ API: POST /api/simulation/run rejects negative bufferPoolSize with 400 (3.1ms)
-✔ API: POST /api/workload/generate returns synthetic sequence (4.1ms)
-✔ API: GET /api/experiments handles offline database gracefully (4.1ms)
-✔ Workload Generator - Sequential produces correct stride (1.9ms)
-✔ Workload Generator - Random is deterministic with same seed (0.2ms)
-✔ Workload Generator - High Locality adheres to bounds (0.1ms)
-✔ Simulator Service - Can locate compiled C++ engine executable (0.2ms)
-✔ Simulator Service - Executes C++ engine and returns valid simulation JSON (20.6ms)
-✔ Simulator Service - Different algorithms yield correct victim metrics (24.8ms)
-ℹ tests 12 | pass 12 | fail 0
+# tests 30
+# pass 30
+# fail 0
 ```
 
 Start the live backend server:
-```powershell
-npm.cmd start
+```bash
+ENGINE_PATH=$PWD/../engine/build/simulator npm start
+# Server running on port 5000 (PORT env var overrides)
 ```
-*Server running on port 5000.*
-
----
+Without MongoDB the server starts in standalone mode: simulations work; history is
+unavailable and `GET /api/experiments` reports `dbConnected: false` with an empty list.
 
 ## Building & Running the React Frontend
-Navigate to `client/`:
-```powershell
+```bash
 cd client
-npm.cmd run build   # Verified Vite production build in 114ms
-npm.cmd run dev     # Starts development UI on http://localhost:5173
+npm install
+npm run lint        # oxlint (clean; a few pre-existing warnings)
+npm run build       # Verified Vite production build
+npm run dev         # Development UI on http://localhost:5173
+npm run preview     # Serves the production build
 ```
+Set the backend URL via the client's API base (see `client/src/services/api.js`).
 
----
+## API Summary
+| Endpoint | Method | Notes |
+|---|---|---|
+| `/api/status` | GET | Engine availability + DB connection state |
+| `/api/simulation/run` | POST | Runs one algorithm; validates input strictly; stores `referenceSequence`, `seed`, `writeRatio`, per-layer metrics when the DB is online |
+| `/api/simulation/compare` | POST | Runs LRU, FIFO, Clock and OPT on the identical sequence; returns per-algorithm summary and per-layer metrics |
+| `/api/workload/types` | GET | Lists the five supported workload types |
+| `/api/workload/generate` | POST | Generates a deterministic reference sequence (validates type, counts, seed) |
+| `/api/experiments` | GET | History list (offline: `dbConnected:false` + empty list) |
+| `/api/experiments/:id` | GET | Single experiment + persisted events (step numbers + per-step buffer states) |
 
-## Automated Verification Matrix
+## Metrics Definitions
+All counters exist **per layer** (`buffer*` for the DBMS buffer pool, `vm*` for the
+OS virtual memory layer):
 
-| Test Suite | File Path | Total Tests | Passed | Failed | Status |
+- **Requests / Hits / Misses:** buffer-pool accesses; `hits + misses = totalRequests`.
+- **Hit Ratio / Miss Ratio:** percentages over the layer's own requests.
+- **Page Faults (VM):** virtual-memory misses — **not** buffer misses.
+- **Fault Rate:** page faults over VM requests.
+- **Disk Reads:** one read per layer miss (`bufferDiskReads = bufferMisses`, `vmDiskReads = pageFaults`).
+- **Disk Writes / Dirty Evictions:** a dirty page eviction triggers one write-back; clean evictions write nothing. `clean + dirty = evictions`.
+- **Evictions:** `max(0, misses - frames)` for a steady-state buffer pool.
+- Legacy combined fields (`diskReads`, `diskWrites`, `evictions`, `dirtyEvictions`) are the sums of both layers.
+- `writeRatio` echoes the configured percentage; the actual number of writes is
+  deterministic for a given seed (Bernoulli mask) but may differ slightly from
+  `ratio × requests`.
+
+## Known Limitations
+- **MongoDB persistence and DB-backed replay are NOT VERIFIED** in this
+  environment (no MongoDB server available). The code paths exist and the
+  offline behavior is verified.
+- **Browser-level interaction was NOT RUN** (no browser automation available);
+  frontend verification covers lint, production build, serving the build, and
+  code-level review.
+- Historical experiments created before reference-sequence storage cannot be
+  replayed exactly; the UI states this explicitly instead of regenerating data.
+- Engine JSON output caps step details at 1000 steps and events at 5000
+  (`stepsTruncated`/`eventsTruncated` flags); final metrics always cover the
+  complete run.
+- Very large frame counts combined with very long runs produce very large
+  per-step `frames` snapshots; recommended demonstration range is ≤ 500 requests
+  and ≤ 100 frames.
+- The engine binary is compiled per platform; on Windows, build with a C++20
+  MinGW toolchain or use WSL.
+- On WSL, building/running from `/mnt/c` (9P filesystem) can be slow or hang in
+  rare cases; running the server from the Linux-native filesystem is faster.
+
+## Automated Verification Matrix (verified end of Phase 5)
+
+| Test Suite | Location | Total Checks | Passed | Failed | Status |
 |---|---|:---:|:---:|:---:|:---:|
-| **C++ Core Engine Tests** | `engine/tests/engine_test.cpp` | 9 | 9 | 0 | **100% PASS** |
-| **Backend Workload Tests** | `server/src/tests/server.test.js` | 3 | 3 | 0 | **100% PASS** |
-| **C++ Engine Process Runner** | `server/src/tests/server.test.js` | 3 | 3 | 0 | **100% PASS** |
-| **Express REST Endpoints** | `server/src/tests/api.test.js` | 6 | 6 | 0 | **100% PASS** |
-| **Vite Frontend Build** | `client/package.json` | 1 | 1 | 0 | **100% PASS** |
-| **Total Automated Suite** | — | **22** | **22** | **0** | **VERIFIED** |
+| **C++ Engine Unit Tests** | `engine/tests/engine_test.cpp` | 1768 | 1768 | 0 | **PASS** (also under ASan/UBSan) |
+| **CTest** | `engine/build` | 1 | 1 | 0 | **PASS** |
+| **Algorithm Matrix (CLI)** | 4 algorithms × 36 seq/frame combos + 180 workload runs | 24 + matrix | all | 0 | **PASS** |
+| **Metrics/Read-Write/Reproducibility (CLI)** | 5 types × seeds × boundary configs | 60+ | all | 0 | **PASS** |
+| **Backend Unit + API Tests** | `server/src/tests` | 30 | 30 | 0 | **PASS** (requires `ENGINE_PATH`) |
+| **HTTP Integration Checks** | `/status`, `/run`, `/compare`, `/workload/*`, `/experiments` | 38 | 38 | 0 | **PASS** (offline DB) |
+| **Frontend Lint + Production Build** | `client` | 2 | 2 | 0 | **PASS** |
+| **MongoDB persistence & DB replay** | — | — | — | — | **NOT VERIFIED** (no MongoDB) |
+| **Interactive browser session** | — | — | — | — | **NOT RUN** (no automation) |

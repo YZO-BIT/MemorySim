@@ -12,6 +12,7 @@
 #include "replacement/LRU.hpp"
 #include "replacement/FIFO.hpp"
 #include "replacement/Clock.hpp"
+#include "replacement/Optimal.hpp"
 #include "metrics/MetricsCollector.hpp"
 #include "workload/WorkloadGenerator.hpp"
 
@@ -25,6 +26,7 @@ struct StepFrameSnapshot {
 struct StepRecord {
     int stepNumber;
     int requestedPage;
+    bool isWrite;
     std::string result; // "HIT" or "MISS"
     int frame;
     int evictedPage; // -1 if none
@@ -46,6 +48,7 @@ struct SimulationConfig {
     std::string workloadType = "Random";
     int totalRequests = 10;
     unsigned int seed = 42;
+    int writeRatioPercent = 0;
     std::vector<int> explicitSequence;
     bool jsonMode = false;
 };
@@ -56,14 +59,36 @@ struct EventItem {
     std::string message;
 };
 
-static std::unique_ptr<ReplacementPolicy> createPolicy(const std::string& algo) {
+static std::string toUpperCopy(const std::string& algo) {
     std::string upper = algo;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+    return upper;
+}
+
+static bool isKnownAlgorithm(const std::string& algo) {
+    std::string upper = toUpperCopy(algo);
+    return upper == "LRU" || upper == "FIFO" || upper == "CLOCK" ||
+           upper == "OPT" || upper == "OPTIMAL";
+}
+
+// Canonical display name used consistently in CLI text and JSON output.
+static std::string canonicalAlgorithm(const std::string& algo) {
+    std::string upper = toUpperCopy(algo);
+    if (upper == "FIFO") return "FIFO";
+    if (upper == "CLOCK") return "Clock";
+    if (upper == "OPT" || upper == "OPTIMAL") return "OPT";
+    return "LRU";
+}
+
+static std::unique_ptr<ReplacementPolicy> createPolicy(const std::string& algo) {
+    std::string upper = toUpperCopy(algo);
 
     if (upper == "FIFO") {
         return std::make_unique<FIFO>();
     } else if (upper == "CLOCK") {
         return std::make_unique<Clock>();
+    } else if (upper == "OPT" || upper == "OPTIMAL") {
+        return std::make_unique<Optimal>();
     }
     return std::make_unique<LRU>();
 }
@@ -87,14 +112,15 @@ static void printUsage(const char* progName) {
     std::cerr << "Usage: " << progName << " [options]\n"
               << "Options:\n"
               << "  --json                    Enable machine-readable JSON output\n"
-              << "  --algo <LRU|FIFO|Clock>   Replacement policy (default: LRU)\n"
+              << "  --algo <LRU|FIFO|Clock|OPT> Replacement policy (default: LRU)\n"
               << "  --buffer-size <N>         Number of buffer pool frames (default: 3)\n"
               << "  --virtual-pages <N>       Number of virtual memory pages (default: 10)\n"
               << "  --physical-frames <N>     Number of physical frames (default: 3)\n"
               << "  --page-size <N>           Page size in bytes (default: 4096)\n"
-              << "  --workload <type>         Workload type (Sequential, Random, HighLocality, Mixed)\n"
+              << "  --workload <type>         Workload type (Sequential, Random, HighLocality, Mixed, Repeating)\n"
               << "  --requests <N>            Number of page requests (default: 10)\n"
               << "  --seed <N>                Random seed for workload generation (default: 42)\n"
+              << "  --write-ratio <N>         Percentage of requests that are writes, 0-100 (default: 0)\n"
               << "  --sequence <p1,p2,...>    Explicit comma-separated reference string\n"
               << "  --help, -h                Show this help message\n";
 }
@@ -102,6 +128,7 @@ static void printUsage(const char* progName) {
 int main(int argc, char* argv[]) {
     SimulationConfig config;
     bool hasArgs = (argc > 1);
+    bool algoProvided = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -110,6 +137,7 @@ int main(int argc, char* argv[]) {
             config.jsonMode = true;
         } else if (arg == "--algo" && i + 1 < argc) {
             config.algorithm = argv[++i];
+            algoProvided = true;
         } else if ((arg == "--buffer-size" || arg == "--frames") && i + 1 < argc) {
             config.bufferPoolSize = std::max(1, std::stoi(argv[++i]));
         } else if ((arg == "--virtual-pages" || arg == "--pages") && i + 1 < argc) {
@@ -124,6 +152,8 @@ int main(int argc, char* argv[]) {
             config.totalRequests = std::max(1, std::stoi(argv[++i]));
         } else if (arg == "--seed" && i + 1 < argc) {
             config.seed = static_cast<unsigned int>(std::stoul(argv[++i]));
+        } else if (arg == "--write-ratio" && i + 1 < argc) {
+            config.writeRatioPercent = std::stoi(argv[++i]);
         } else if (arg == "--sequence" && i + 1 < argc) {
             std::string seqStr = argv[++i];
             std::stringstream ss(seqStr);
@@ -133,15 +163,35 @@ int main(int argc, char* argv[]) {
                 if (!item.empty()) {
                     try {
                         config.explicitSequence.push_back(std::stoi(item));
-                    } catch (...) {}
+                    } catch (...) {
+                        std::cerr << "Error: invalid page reference '" << item
+                                  << "' in --sequence (must be a comma-separated list of integers).\n";
+                        return 1;
+                    }
                 }
             }
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             return 0;
         } else {
-            std::cerr << "Warning: Unknown option '" << arg << "'\n";
+            std::cerr << "Error: Unknown option '" << arg << "'\n"
+                      << "Run with --help to see valid options.\n";
+            return 1;
         }
+    }
+
+    // Validate and canonicalize the requested algorithm
+    if (algoProvided && !isKnownAlgorithm(config.algorithm)) {
+        std::cerr << "Error: Unsupported algorithm '" << config.algorithm << "'.\n"
+                  << "Valid algorithms: LRU, FIFO, Clock, OPT.\n";
+        return 1;
+    }
+    config.algorithm = canonicalAlgorithm(config.algorithm);
+
+    if (config.writeRatioPercent < 0 || config.writeRatioPercent > 100) {
+        std::cerr << "Error: --write-ratio must be between 0 and 100 (got "
+                  << config.writeRatioPercent << ").\n";
+        return 1;
     }
 
     // Determine requests sequence
@@ -150,6 +200,11 @@ int main(int argc, char* argv[]) {
         requests = config.explicitSequence;
         config.totalRequests = static_cast<int>(requests.size());
     } else if (hasArgs) {
+        if (!WorkloadGenerator::isKnownType(config.workloadType)) {
+            std::cerr << "Error: Unknown workload type '" << config.workloadType << "'.\n"
+                      << "Valid types: Sequential, Random, HighLocality, Mixed, Repeating.\n";
+            return 1;
+        }
         WorkloadType wtype = WorkloadGenerator::parseType(config.workloadType);
         config.workloadType = WorkloadGenerator::typeToString(wtype);
         requests = WorkloadGenerator::generate(wtype, config.totalRequests, config.virtualPages, config.seed);
@@ -160,6 +215,10 @@ int main(int argc, char* argv[]) {
     }
 
     auto startTime = std::chrono::high_resolution_clock::now();
+
+    // Deterministic read/write assignment for the whole run.
+    std::vector<bool> writeMask =
+        WorkloadGenerator::writeMask(config.totalRequests, config.writeRatioPercent, config.seed);
 
     MetricsCollector bufferMetrics;
     BufferPoolManager bufferPool(
@@ -176,6 +235,10 @@ int main(int argc, char* argv[]) {
         &vmMetrics
     );
 
+    // Give lookahead policies (e.g. OPT) the full reference sequence up front.
+    bufferPool.setReferenceSequence(requests);
+    vm.setReferenceSequence(requests);
+
     std::vector<EventItem> events;
     events.reserve(requests.size() * 3);
 
@@ -187,6 +250,7 @@ int main(int argc, char* argv[]) {
 
     for (size_t step = 0; step < requests.size(); ++step) {
         int page = requests[step];
+        bool isWrite = step < writeMask.size() ? writeMask[step] : false;
         std::ostringstream timeStr;
         timeStr << "Step " << (step + 1);
 
@@ -204,7 +268,8 @@ int main(int argc, char* argv[]) {
 
         // Buffer Pool access
         int oldEvictions = bufferPool.getEvictions();
-        int bpFrame = bufferPool.accessPage(page, false);
+        int bufDirtyBefore = bufferMetrics.getDirtyEvictions();
+        int bpFrame = bufferPool.accessPage(page, isWrite);
 
         int evictedPage = -1;
         int loadedPage = -1;
@@ -245,7 +310,8 @@ int main(int argc, char* argv[]) {
 
         // Virtual Memory access
         bool wasInVm = vm.getPageTable().isPresent(page);
-        int vmFrame = vm.accessPage(page, false);
+        int vmDirtyBefore = vmMetrics.getDirtyEvictions();
+        int vmFrame = vm.accessPage(page, isWrite);
 
         if (!wasInVm) {
             events.push_back({
@@ -261,6 +327,22 @@ int main(int argc, char* argv[]) {
                     "Virtual Page " + std::to_string(page) + " \xe2\x86\x92 Physical Frame " + std::to_string(vmFrame)
                 });
             }
+        }
+
+        // Dirty-page write-back events (disk writes happen only on eviction)
+        if (bufferMetrics.getDirtyEvictions() > bufDirtyBefore) {
+            events.push_back({
+                timeStr.str(),
+                "DISK_WRITE",
+                "Buffer Pool \xe2\x86\x92 Dirty page evicted, written back to disk"
+            });
+        }
+        if (vmMetrics.getDirtyEvictions() > vmDirtyBefore) {
+            events.push_back({
+                timeStr.str(),
+                "DISK_WRITE",
+                "Virtual Memory \xe2\x86\x92 Dirty page evicted, written back to disk"
+            });
         }
 
         // Capture after-frames snapshot for this step
@@ -283,6 +365,7 @@ int main(int argc, char* argv[]) {
         stepRecords.push_back({
             static_cast<int>(step + 1),
             page,
+            isWrite,
             wasInBuffer ? "HIT" : "MISS",
             wasInBuffer ? hitFrame : bpFrame,
             evictedPage,
@@ -308,7 +391,9 @@ int main(int argc, char* argv[]) {
                   << "    \"physicalFrames\": " << config.physicalFrames << ",\n"
                   << "    \"pageSize\": " << config.pageSize << ",\n"
                   << "    \"workloadType\": \"" << escapeJson(config.workloadType) << "\",\n"
-                  << "    \"totalRequests\": " << config.totalRequests << "\n"
+                  << "    \"totalRequests\": " << config.totalRequests << ",\n"
+                  << "    \"seed\": " << config.seed << ",\n"
+                  << "    \"writeRatio\": " << config.writeRatioPercent << "\n"
                   << "  },\n";
 
         // Reference sequence
@@ -348,22 +433,47 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "  ],\n";
 
-        // Combined metrics
+        // Layer-separated metrics: buffer pool and virtual memory are
+        // independent layers; their counters are never summed into the
+        // layer-specific fields. The legacy combined fields are kept for
+        // backward compatibility with existing consumers.
         int totalReq = config.totalRequests;
+        int bufferRequests = bufferMetrics.getTotalRequests();
         int bufHits = bufferMetrics.getBufferHits();
         int bufMisses = bufferMetrics.getBufferMisses();
-        double hitRatio = totalReq > 0 ? (static_cast<double>(bufHits) / totalReq) * 100.0 : 0.0;
+        int vmRequests = vmMetrics.getTotalRequests();
+        int vmHits = vmMetrics.getBufferHits();
         int pageFaults = vmMetrics.getPageFaults();
-        double faultRate = totalReq > 0 ? (static_cast<double>(pageFaults) / totalReq) * 100.0 : 0.0;
+
+        auto pct = [](int numerator, int denominator) {
+            if (denominator <= 0) {
+                return 0.0;
+            }
+            return (static_cast<double>(numerator) / static_cast<double>(denominator)) * 100.0;
+        };
 
         std::cout << "  \"metrics\": {\n"
                   << "    \"totalRequests\": " << totalReq << ",\n"
+                  << "    \"bufferRequests\": " << bufferRequests << ",\n"
                   << "    \"bufferHits\": " << bufHits << ",\n"
                   << "    \"bufferMisses\": " << bufMisses << ",\n"
                   << std::fixed << std::setprecision(2)
-                  << "    \"bufferHitRatio\": " << hitRatio << ",\n"
+                  << "    \"bufferHitRatio\": " << pct(bufHits, bufferRequests) << ",\n"
+                  << "    \"bufferMissRatio\": " << pct(bufMisses, bufferRequests) << ",\n"
+                  << "    \"bufferDiskReads\": " << bufferMetrics.getDiskReads() << ",\n"
+                  << "    \"bufferDiskWrites\": " << bufferMetrics.getDiskWrites() << ",\n"
+                  << "    \"bufferEvictions\": " << bufferPool.getEvictions() << ",\n"
+                  << "    \"bufferDirtyEvictions\": " << bufferMetrics.getDirtyEvictions() << ",\n"
+                  << "    \"vmRequests\": " << vmRequests << ",\n"
+                  << "    \"vmHits\": " << vmHits << ",\n"
+                  << "    \"vmHitRatio\": " << pct(vmHits, vmRequests) << ",\n"
                   << "    \"pageFaults\": " << pageFaults << ",\n"
-                  << "    \"pageFaultRate\": " << faultRate << ",\n"
+                  << "    \"pageFaultRate\": " << pct(pageFaults, vmRequests) << ",\n"
+                  << "    \"vmDiskReads\": " << vmMetrics.getDiskReads() << ",\n"
+                  << "    \"vmDiskWrites\": " << vmMetrics.getDiskWrites() << ",\n"
+                  << "    \"vmEvictions\": " << vmMetrics.getEvictions() << ",\n"
+                  << "    \"vmDirtyEvictions\": " << vmMetrics.getDirtyEvictions() << ",\n"
+                  << "    \"writeRatio\": " << config.writeRatioPercent << ",\n"
                   << "    \"diskReads\": " << (bufMisses + pageFaults) << ",\n"
                   << "    \"diskWrites\": " << (bufferMetrics.getDiskWrites() + vmMetrics.getDiskWrites()) << ",\n"
                   << "    \"evictions\": " << (bufferPool.getEvictions() + vmMetrics.getEvictions()) << ",\n"
@@ -371,13 +481,28 @@ int main(int argc, char* argv[]) {
                   << "    \"executionTimeMs\": " << executionTimeMs << "\n"
                   << "  },\n";
 
-        // Per-step execution details
+        // Per-step execution details. Step/event JSON capture is bounded so a
+        // long run cannot produce unbounded output; metrics always reflect the
+        // complete run.
+        const size_t kMaxJsonSteps = 1000;
+        const size_t kMaxJsonEvents = 5000;
+        const size_t stepsEmitted = std::min(stepRecords.size(), kMaxJsonSteps);
+        const size_t eventsEmitted = std::min(events.size(), kMaxJsonEvents);
+
+        std::cout << "  \"totalSteps\": " << stepRecords.size() << ",\n"
+                  << "  \"stepsEmitted\": " << stepsEmitted << ",\n"
+                  << "  \"stepsTruncated\": " << (stepRecords.size() > kMaxJsonSteps ? "true" : "false") << ",\n"
+                  << "  \"totalEvents\": " << events.size() << ",\n"
+                  << "  \"eventsEmitted\": " << eventsEmitted << ",\n"
+                  << "  \"eventsTruncated\": " << (events.size() > kMaxJsonEvents ? "true" : "false") << ",\n";
+
         std::cout << "  \"steps\": [\n";
-        for (size_t s = 0; s < stepRecords.size(); ++s) {
+        for (size_t s = 0; s < stepsEmitted; ++s) {
             const auto& st = stepRecords[s];
             std::cout << "    {\n"
                       << "      \"step\": " << st.stepNumber << ",\n"
                       << "      \"requestedPage\": " << st.requestedPage << ",\n"
+                      << "      \"isWrite\": " << (st.isWrite ? "true" : "false") << ",\n"
                       << "      \"result\": \"" << st.result << "\",\n"
                       << "      \"frame\": " << st.frame << ",\n"
                       << "      \"evictedPage\": " << (st.evictedPage >= 0 ? std::to_string(st.evictedPage) : "null") << ",\n"
@@ -399,18 +524,18 @@ int main(int argc, char* argv[]) {
                           << "        }" << (f + 1 < st.frames.size() ? "," : "") << "\n";
             }
             std::cout << "      ]\n"
-                      << "    }" << (s + 1 < stepRecords.size() ? "," : "") << "\n";
+                      << "    }" << (s + 1 < stepsEmitted ? "," : "") << "\n";
         }
         std::cout << "  ],\n";
 
         // Events
         std::cout << "  \"events\": [\n";
-        for (size_t i = 0; i < events.size(); ++i) {
+        for (size_t i = 0; i < eventsEmitted; ++i) {
             std::cout << "    {\n"
                       << "      \"time\": \"" << escapeJson(events[i].time) << "\",\n"
                       << "      \"type\": \"" << escapeJson(events[i].type) << "\",\n"
                       << "      \"message\": \"" << escapeJson(events[i].message) << "\"\n"
-                      << "    }" << (i + 1 < events.size() ? "," : "") << "\n";
+                      << "    }" << (i + 1 < eventsEmitted ? "," : "") << "\n";
         }
         std::cout << "  ]\n";
         std::cout << "}\n";
@@ -424,6 +549,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\n\n";
 
         std::cout << "Buffer Pool Frames: " << config.bufferPoolSize << "\n";
+        std::cout << "Write Ratio: " << config.writeRatioPercent << "%\n";
         std::cout << "Buffer Hits: " << bufferMetrics.getBufferHits() << "\n";
         std::cout << "Buffer Misses: " << bufferMetrics.getBufferMisses() << "\n";
         std::cout << "Buffer Evictions: " << bufferPool.getEvictions() << "\n";

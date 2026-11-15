@@ -9,6 +9,14 @@ import AlgorithmComparison from "../components/AlgorithmComparison";
 import PageTable from "../components/PageTable";
 import DiskView from "../components/DiskView";
 import EventLog from "../components/EventLog";
+import {
+  IconPlus,
+  IconCompare,
+  IconList,
+  IconDatabase,
+  IconLayers,
+  IconClock,
+} from "../components/icons";
 
 function Dashboard({
   simulation,
@@ -91,7 +99,7 @@ function Dashboard({
           </p>
         </div>
 
-        <div className="header-action-buttons">
+        <div className="header-actions">
           {onNewSimulation && (
             <button
               type="button"
@@ -99,7 +107,8 @@ function Dashboard({
               onClick={onNewSimulation}
               title="Configure a new simulation with custom RAM, frames & workload"
             >
-              + New Simulation
+              <IconPlus size={14} />
+              New Simulation
             </button>
           )}
 
@@ -107,9 +116,10 @@ function Dashboard({
             type="button"
             className="btn-secondary"
             onClick={() => setActiveTab("compare")}
-            title="Compare LRU, FIFO, Clock on this workload"
+            title="Compare LRU, FIFO, Clock, Optimal on this workload"
           >
-            ⚡ Compare Policies
+            <IconCompare size={14} />
+            Compare Policies
           </button>
         </div>
       </div>
@@ -120,7 +130,7 @@ function Dashboard({
             <strong>Preview Mode:</strong> Currently viewing a sample demonstration. Click "New Simulation" to run live C++ memory simulations.
           </div>
           <button type="button" className="btn-accent-sm" onClick={onNewSimulation}>
-            Run Live Simulation →
+            Run Live Simulation
           </button>
         </div>
       )}
@@ -163,7 +173,8 @@ function Dashboard({
           className={`tab-btn ${activeTab === "timeline" ? "active" : ""}`}
           onClick={() => setActiveTab("timeline")}
         >
-          ▦ Frame Allocation Timeline
+          <IconLayers size={13} />
+          Frame Timeline
         </button>
 
         <button
@@ -171,7 +182,8 @@ function Dashboard({
           className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
           onClick={() => setActiveTab("history")}
         >
-          📋 Reference History Table
+          <IconList size={13} />
+          Reference History
         </button>
 
         <button
@@ -179,7 +191,8 @@ function Dashboard({
           className={`tab-btn ${activeTab === "compare" ? "active" : ""}`}
           onClick={() => setActiveTab("compare")}
         >
-          ⚡ Algorithm Comparison (LRU vs FIFO vs Clock)
+          <IconCompare size={13} />
+          Algorithm Comparison
         </button>
 
         <button
@@ -187,7 +200,8 @@ function Dashboard({
           className={`tab-btn ${activeTab === "vm" ? "active" : ""}`}
           onClick={() => setActiveTab("vm")}
         >
-          🗂 Page Table &amp; Architecture
+          <IconDatabase size={13} />
+          Page Table &amp; Architecture
         </button>
 
         <button
@@ -195,7 +209,8 @@ function Dashboard({
           className={`tab-btn ${activeTab === "events" ? "active" : ""}`}
           onClick={() => setActiveTab("events")}
         >
-          📑 Event Audit Log
+          <IconClock size={13} />
+          Event Audit Log
         </button>
       </div>
 

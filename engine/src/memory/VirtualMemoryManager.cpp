@@ -27,6 +27,11 @@ int VirtualMemoryManager::accessPage(
         metrics->recordRequest();
     }
 
+    // Lookahead policies must observe the request regardless of hit/miss.
+    if (replacementPolicy) {
+        replacementPolicy->notifyRequest(virtualPage);
+    }
+
     // Page already exists (Hit)
     if (pageTable.isPresent(virtualPage)) {
         int frame = pageTable.getFrame(virtualPage);
@@ -137,4 +142,10 @@ void VirtualMemoryManager::setMetricsCollector(MetricsCollector* m) {
 
 void VirtualMemoryManager::setReplacementPolicy(std::unique_ptr<ReplacementPolicy> policy) {
     replacementPolicy = std::move(policy);
+}
+
+void VirtualMemoryManager::setReferenceSequence(const std::vector<int>& requests) {
+    if (replacementPolicy) {
+        replacementPolicy->setReferenceSequence(requests);
+    }
 }

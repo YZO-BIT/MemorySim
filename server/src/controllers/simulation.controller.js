@@ -3,87 +3,53 @@ import { generateWorkload } from "../services/workload.service.js";
 import Experiment from "../models/Experiment.js";
 import SimulationEvent from "../models/SimulationEvent.js";
 import { isDbConnected } from "../database/mongodb.js";
+import {
+  validateSimulationInput,
+  buildEventRecords,
+} from "../services/simulation-validation.service.js";
 
-const VALID_ALGORITHMS = ["LRU", "FIFO", "Clock", "CLOCK"];
-const VALID_WORKLOADS = ["Random", "Repeating", "Sequential", "High Locality", "Mixed"];
+// Events are capped at 200 per experiment to prevent massive inserts; the
+// full reference sequence and all step records live in the engine response.
+const MAX_PERSISTED_EVENTS = 200;
+
+const ALGORITHMS = ["LRU", "FIFO", "Clock", "OPT"];
 
 export const runSimulation = async (req, res) => {
   try {
-    const {
-      algorithm = "LRU",
-      bufferPoolSize = 3,
-      virtualPages = 10,
-      physicalFrames = 3,
-      pageSize = 4096,
-      workloadType = "Random",
-      totalRequests = 10,
-      requests,
-      seed = 42,
-    } = req.body || {};
-
-    // Validation
-    const normalizedAlgo = (algorithm || "").trim();
-    if (!VALID_ALGORITHMS.some((a) => a.toLowerCase() === normalizedAlgo.toLowerCase())) {
-      return res.status(400).json({
+    const validation = validateSimulationInput(req.body);
+    if (!validation.ok) {
+      return res.status(validation.status).json({
         success: false,
-        message: `Invalid algorithm '${algorithm}'. Must be one of: LRU, FIFO, Clock.`,
+        message: validation.message,
       });
     }
+    const input = validation.value;
 
-    const bpSize = parseInt(bufferPoolSize, 10);
-    if (isNaN(bpSize) || bpSize < 1 || bpSize > 10000) {
-      return res.status(400).json({
-        success: false,
-        message: "bufferPoolSize must be an integer between 1 and 10000.",
-      });
-    }
-
-    const vPages = parseInt(virtualPages, 10);
-    if (isNaN(vPages) || vPages < 1 || vPages > 100000) {
-      return res.status(400).json({
-        success: false,
-        message: "virtualPages must be an integer between 1 and 100000.",
-      });
-    }
-
-    const pFrames = parseInt(physicalFrames, 10);
-    if (isNaN(pFrames) || pFrames < 1 || pFrames > 10000) {
-      return res.status(400).json({
-        success: false,
-        message: "physicalFrames must be an integer between 1 and 10000.",
-      });
-    }
-
-    const reqCount = parseInt(totalRequests, 10);
-    if (isNaN(reqCount) || reqCount < 1 || reqCount > 100000) {
-      return res.status(400).json({
-        success: false,
-        message: "totalRequests must be an integer between 1 and 100000.",
-      });
-    }
-
-    // Generate or validate request sequence
-    let finalRequests = requests;
-    if (!Array.isArray(finalRequests) || finalRequests.length === 0) {
+    // Generate the canonical reference sequence once (deterministic
+    // Mulberry32, identical to the engine implementation) and pass that
+    // exact sequence to the engine.
+    let finalRequests = input.requests;
+    if (!Array.isArray(finalRequests)) {
       finalRequests = generateWorkload({
-        type: workloadType,
-        totalRequests: reqCount,
-        pageCount: vPages,
-        seed: parseInt(seed, 10) || 42,
+        type: input.workloadType,
+        totalRequests: input.totalRequests,
+        pageCount: input.virtualPages,
+        seed: input.seed,
       });
     }
 
     // Execute through C++ engine
     const engineResult = await executeSimulation({
-      algorithm: normalizedAlgo,
-      bufferPoolSize: bpSize,
-      virtualPages: vPages,
-      physicalFrames: pFrames,
-      pageSize: parseInt(pageSize, 10) || 4096,
-      workloadType,
+      algorithm: input.algorithm,
+      bufferPoolSize: input.bufferPoolSize,
+      virtualPages: input.virtualPages,
+      physicalFrames: input.physicalFrames,
+      pageSize: input.pageSize,
+      workloadType: input.workloadType,
       totalRequests: finalRequests.length,
       requests: finalRequests,
-      seed: parseInt(seed, 10) || 42,
+      seed: input.seed,
+      writeRatio: input.writeRatio,
     });
 
     let persisted = false;
@@ -92,6 +58,7 @@ export const runSimulation = async (req, res) => {
     // Optional MongoDB persistence if database is connected
     if (isDbConnected()) {
       try {
+        const m = engineResult.metrics;
         const experimentDoc = await Experiment.create({
           algorithm: engineResult.config.algorithm.toUpperCase(),
           bufferSize: engineResult.config.bufferPoolSize,
@@ -99,31 +66,50 @@ export const runSimulation = async (req, res) => {
           physicalFrames: engineResult.config.physicalFrames,
           pageSize: engineResult.config.pageSize,
           workloadType: engineResult.config.workloadType,
-          totalRequests: engineResult.metrics.totalRequests,
-          bufferHits: engineResult.metrics.bufferHits,
-          bufferMisses: engineResult.metrics.bufferMisses,
-          bufferHitRatio: engineResult.metrics.bufferHitRatio,
-          pageFaults: engineResult.metrics.pageFaults,
-          pageFaultRate: engineResult.metrics.pageFaultRate,
-          diskReads: engineResult.metrics.diskReads,
-          diskWrites: engineResult.metrics.diskWrites,
-          evictions: engineResult.metrics.evictions,
-          dirtyEvictions: engineResult.metrics.dirtyEvictions,
-          executionTimeMs: engineResult.metrics.executionTimeMs,
+          totalRequests: m.totalRequests,
+          seed: input.seed,
+          writeRatio: input.writeRatio,
+          // Exact original reference sequence for historical replay
+          referenceSequence: finalRequests,
+
+          // Buffer-pool layer metrics
+          bufferHits: m.bufferHits,
+          bufferMisses: m.bufferMisses,
+          bufferHitRatio: m.bufferHitRatio,
+          bufferDiskReads: m.bufferDiskReads ?? 0,
+          bufferDiskWrites: m.bufferDiskWrites ?? 0,
+          bufferEvictions: m.bufferEvictions ?? 0,
+          bufferDirtyEvictions: m.bufferDirtyEvictions ?? 0,
+
+          // Virtual-memory layer metrics
+          pageFaults: m.pageFaults,
+          pageFaultRate: m.pageFaultRate,
+          vmDiskReads: m.vmDiskReads ?? 0,
+          vmDiskWrites: m.vmDiskWrites ?? 0,
+          vmEvictions: m.vmEvictions ?? 0,
+          vmDirtyEvictions: m.vmDirtyEvictions ?? 0,
+
+          // Legacy combined counters kept for backward compatibility
+          diskReads: m.diskReads,
+          diskWrites: m.diskWrites,
+          evictions: m.evictions,
+          dirtyEvictions: m.dirtyEvictions,
+
+          executionTimeMs: m.executionTimeMs,
         });
 
         experimentId = experimentDoc._id;
         persisted = true;
 
-        // Persist events if feasible (up to 200 events to prevent massive inserts)
-        if (Array.isArray(engineResult.events) && engineResult.events.length > 0) {
-          const eventsToPersist = engineResult.events.slice(0, 200).map((ev) => ({
-            experimentId: experimentDoc._id,
-            requestPage: parseInt((ev.message.match(/Page\s+(\d+)/i) || [])[1], 10) || 0,
-            event: ev.type,
-            bufferState: engineResult.bufferPool.map((b) => b.pageId).filter((p) => p !== null),
-          }));
-          await SimulationEvent.insertMany(eventsToPersist);
+        // Persist events if feasible (capped); each event carries the
+        // correct step-level state via buildEventRecords.
+        const eventRecords = buildEventRecords(
+          engineResult,
+          experimentDoc._id,
+          MAX_PERSISTED_EVENTS
+        );
+        if (eventRecords.length > 0) {
+          await SimulationEvent.insertMany(eventRecords);
         }
       } catch (dbError) {
         console.warn("[Database] Could not persist experiment:", dbError.message);
@@ -148,61 +134,63 @@ export const runSimulation = async (req, res) => {
 
 export const compareSimulation = async (req, res) => {
   try {
-    const {
-      bufferPoolSize = 3,
-      virtualPages = 10,
-      physicalFrames = 3,
-      pageSize = 4096,
-      workloadType = "Random",
-      totalRequests = 10,
-      requests,
-      seed = 42,
-    } = req.body || {};
+    const validation = validateSimulationInput(req.body, { requireAlgorithm: false });
+    if (!validation.ok) {
+      return res.status(validation.status).json({
+        success: false,
+        message: validation.message,
+      });
+    }
+    const input = validation.value;
 
-    const bpSize = Math.max(1, parseInt(bufferPoolSize, 10) || 3);
-    const vPages = Math.max(1, parseInt(virtualPages, 10) || 10);
-    const pFrames = Math.max(1, parseInt(physicalFrames, 10) || 3);
-    const reqCount = Math.max(1, parseInt(totalRequests, 10) || 10);
-
-    let finalRequests = requests;
-    if (!Array.isArray(finalRequests) || finalRequests.length === 0) {
+    let finalRequests = input.requests;
+    if (!Array.isArray(finalRequests)) {
       finalRequests = generateWorkload({
-        type: workloadType,
-        totalRequests: reqCount,
-        pageCount: vPages,
-        seed: parseInt(seed, 10) || 42,
+        type: input.workloadType,
+        totalRequests: input.totalRequests,
+        pageCount: input.virtualPages,
+        seed: input.seed,
       });
     }
 
-    const algorithms = ["LRU", "FIFO", "Clock"];
     const results = await Promise.all(
-      algorithms.map((algo) =>
+      ALGORITHMS.map((algo) =>
         executeSimulation({
           algorithm: algo,
-          bufferPoolSize: bpSize,
-          virtualPages: vPages,
-          physicalFrames: pFrames,
-          pageSize: parseInt(pageSize, 10) || 4096,
-          workloadType,
+          bufferPoolSize: input.bufferPoolSize,
+          virtualPages: input.virtualPages,
+          physicalFrames: input.physicalFrames,
+          pageSize: input.pageSize,
+          workloadType: input.workloadType,
           totalRequests: finalRequests.length,
           requests: finalRequests,
-          seed: parseInt(seed, 10) || 42,
+          seed: input.seed,
+          writeRatio: input.writeRatio,
         })
       )
     );
 
+    // Buffer-pool layer metrics and virtual-memory layer metrics are kept
+    // separate; no counters are combined across layers.
     const summary = results.map((res) => ({
       algorithm: res.config.algorithm,
       hits: res.metrics.bufferHits,
       misses: res.metrics.bufferMisses,
-      pageFaults: res.metrics.pageFaults,
       hitRatio: res.metrics.bufferHitRatio,
+      missRatio: res.metrics.bufferMissRatio,
+      bufferDiskReads: res.metrics.bufferDiskReads ?? 0,
+      bufferEvictions: res.metrics.bufferEvictions ?? 0,
+      bufferDirtyEvictions: res.metrics.bufferDirtyEvictions ?? 0,
+      vmHits: res.metrics.vmHits ?? 0,
+      pageFaults: res.metrics.pageFaults,
       pageFaultRate: res.metrics.pageFaultRate,
-      evictions: res.metrics.evictions,
+      vmEvictions: res.metrics.vmEvictions ?? 0,
+      vmDirtyEvictions: res.metrics.vmDirtyEvictions ?? 0,
+      writeRatio: res.metrics.writeRatio ?? input.writeRatio,
       executionTimeMs: res.metrics.executionTimeMs,
     }));
 
-    // Find best algorithm (lowest misses/pageFaults)
+    // Find best algorithm (lowest buffer-pool misses)
     let minMisses = Infinity;
     let best = [];
     for (const item of summary) {
@@ -217,12 +205,15 @@ export const compareSimulation = async (req, res) => {
     return res.json({
       success: true,
       sequence: finalRequests,
-      frames: bpSize,
+      frames: input.bufferPoolSize,
+      writeRatio: input.writeRatio,
+      seed: input.seed,
       summary,
       results: {
         LRU: results[0],
         FIFO: results[1],
         Clock: results[2],
+        OPT: results[3],
       },
       bestAlgorithms: best,
     });

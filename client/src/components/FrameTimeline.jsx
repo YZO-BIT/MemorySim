@@ -52,6 +52,9 @@ function FrameTimeline({
               const isActive = st.step === currentStepIndex;
               const isHit = st.result === "HIT";
               const isEviction = st.evictedPage !== null && st.evictedPage !== undefined;
+              const framesById = st.frames?.length
+                ? new Map(st.frames.map((f) => [f.frameId, f]))
+                : null;
 
               return (
                 <tr
@@ -59,7 +62,6 @@ function FrameTimeline({
                   className={`timeline-row ${isActive ? "timeline-row-active" : ""}`}
                   onClick={() => onSelectStep && onSelectStep(st.step)}
                   title={`Jump to Step ${st.step}`}
-                  style={{ cursor: "pointer" }}
                 >
                   <td className="sticky-col td-step">
                     <span className={`step-badge-mini ${isActive ? "active" : ""}`}>
@@ -78,7 +80,7 @@ function FrameTimeline({
                   </td>
 
                   {frameIndices.map((fIdx) => {
-                    const frameData = st.frames ? st.frames.find((f) => f.frameId === fIdx) : null;
+                    const frameData = framesById ? framesById.get(fIdx) : null;
                     const pageInFrame = frameData && frameData.pageId !== null && frameData.pageId !== undefined
                       ? frameData.pageId
                       : null;

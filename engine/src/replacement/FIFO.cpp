@@ -1,44 +1,38 @@
 #include "replacement/FIFO.hpp"
 
-void FIFO::access(int frameId) {
-    // FIFO does not change order on access.
+void FIFO::access(int) {
+    // FIFO order is unaffected by accesses.
 }
 
 void FIFO::insert(int frameId) {
-    if (present.count(frameId)) {
+    if (position.find(frameId) != position.end()) {
         return;
     }
 
     order.push_back(frameId);
-    present.insert(frameId);
+    position[frameId] = std::prev(order.end());
 }
 
 void FIFO::remove(int frameId) {
-    if (present.erase(frameId)) {
-        for (auto it = order.begin(); it != order.end(); ++it) {
-            if (*it == frameId) {
-                order.erase(it);
-                break;
-            }
-        }
+    auto it = position.find(frameId);
+
+    if (it == position.end()) {
+        return;
     }
+
+    order.erase(it->second);
+    position.erase(it);
 }
 
 int FIFO::evict(const std::function<bool(int)>& isEligible) {
-    for (auto it = order.begin(); it != order.end(); ) {
+    for (auto it = order.begin(); it != order.end(); ++it) {
         int candidate = *it;
-        if (!present.count(candidate)) {
-            it = order.erase(it);
-            continue;
-        }
 
         if (!isEligible || isEligible(candidate)) {
-            present.erase(candidate);
+            position.erase(candidate);
             order.erase(it);
             return candidate;
         }
-
-        ++it;
     }
 
     return -1;

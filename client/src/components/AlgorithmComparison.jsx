@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import api from "../services/api";
+import { IconTarget, IconInfo } from "./icons";
 
 /**
  * AlgorithmComparison
- * Compares LRU, FIFO, and Clock using the exact same page reference sequence and frame count.
+ * Compares LRU, FIFO, Clock, and Optimal (Belady) using the exact same page reference sequence and frame count.
  * All results are computed by the C++ engine via POST /api/simulation/compare.
  */
 function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSize = 4096 }) {
@@ -80,7 +81,7 @@ function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSi
     <div className="panel comparison-panel">
       <div className="panel-header">
         <div>
-          <h2>Replacement Policy Comparison (LRU vs FIFO vs Clock)</h2>
+          <h2>Replacement Policy Comparison (LRU vs FIFO vs Clock vs Optimal)</h2>
           <p>
             Fair, synchronized benchmark: identical reference sequence &amp; frame capacity executed on C++ engine
           </p>
@@ -92,7 +93,7 @@ function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSi
           disabled={loading}
           onClick={() => handleRunComparison()}
         >
-          {loading ? "Simulating All 3 Engines..." : "⚡ Run Fair Comparison"}
+          {loading ? "Simulating All 4 Engines..." : "Run Fair Comparison"}
         </button>
       </div>
 
@@ -149,15 +150,30 @@ function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSi
         <div className="comparison-results-section">
           {comparisonData.bestAlgorithms && (
             <div className="winner-banner">
-              <span className="trophy-icon">🏆</span>
+              <span className="trophy-icon"><IconTarget size={14} /></span>
               <div>
                 <strong>
                   Best Performance: {comparisonData.bestAlgorithms.join(" & ")}
                 </strong>
                 <p>
-                  Produced the lowest page fault count ({
-                    comparisonData.summary.find((s) => s.algorithm === comparisonData.bestAlgorithms[0])?.pageFaults
-                  } faults) for this specific workload.
+                  {comparisonData.bestAlgorithms.length === 1 &&
+                  comparisonData.bestAlgorithms[0] === "OPT" ? (
+                    <>
+                      Produced the lowest possible page fault count (
+                        {comparisonData.summary.find((s) => s.algorithm === "OPT")?.pageFaults}
+                      {" "}faults). OPT is the theoretical lower bound — no implementable
+                      policy can do better on this workload; LRU, FIFO and Clock
+                      approximate it.
+                    </>
+                  ) : (
+                    <>
+                      Produced the lowest page fault count (
+                        {comparisonData.summary.find((s) => s.algorithm === comparisonData.bestAlgorithms[0])?.pageFaults}
+                      {" "}faults) for this specific workload.
+                      {comparisonData.bestAlgorithms.includes("OPT") &&
+                        " Practical algorithms match the theoretical optimum (OPT) here."}
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -174,30 +190,44 @@ function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSi
                 >
                   <div className="card-top">
                     <span className="algo-title">{item.algorithm}</span>
-                    {isWinner && <span className="winner-tag">Lowest Faults</span>}
+                    {item.algorithm === "OPT" ? (
+                      <span className="winner-tag tag-benchmark">Theoretical Benchmark</span>
+                    ) : (
+                      isWinner && <span className="winner-tag">Lowest Faults</span>
+                    )}
                   </div>
 
                   <div className="card-metrics-table">
                     <div className="metric-row">
-                      <span>Page Hits:</span>
+                      <span>Buffer Hits:</span>
                       <strong className="text-green">{item.hits}</strong>
                     </div>
                     <div className="metric-row">
-                      <span>Page Faults:</span>
-                      <strong className="text-red">{item.pageFaults}</strong>
+                      <span>Buffer Misses:</span>
+                      <strong className="text-amber">{item.misses}</strong>
                     </div>
                     <div className="metric-row">
-                      <span>Hit Ratio:</span>
+                      <span>Buffer Hit Ratio:</span>
                       <strong className="text-accent">{Number(item.hitRatio || 0).toFixed(1)}%</strong>
                     </div>
                     <div className="metric-row">
-                      <span>Fault Rate:</span>
+                      <span>Page Faults (VM):</span>
+                      <strong className="text-red">{item.pageFaults}</strong>
+                    </div>
+                    <div className="metric-row">
+                      <span>Page Fault Rate:</span>
                       <strong className="text-amber">{Number(item.pageFaultRate || 0).toFixed(1)}%</strong>
                     </div>
                     <div className="metric-row">
-                      <span>Evictions:</span>
-                      <span>{item.evictions}</span>
+                      <span>Evictions (Buffer / VM):</span>
+                      <span>{item.bufferEvictions} / {item.vmEvictions}</span>
                     </div>
+                    {item.bufferDirtyEvictions > 0 && (
+                      <div className="metric-row">
+                        <span>Dirty Evictions:</span>
+                        <span>{item.bufferDirtyEvictions}</span>
+                      </div>
+                    )}
                     <div className="metric-row">
                       <span>Engine Latency:</span>
                       <span className="text-muted">{item.executionTimeMs} ms</span>
@@ -219,7 +249,7 @@ function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSi
           </div>
 
           <div className="comparison-insight-box">
-            <span className="insight-icon">💡</span>
+            <span className="insight-icon"><IconInfo size={14} /></span>
             <div>
               <strong>Systems Engineering Insight:</strong>
               <p>
@@ -227,6 +257,7 @@ function AlgorithmComparison({ defaultSequence, defaultFrames = 3, defaultPageSi
                 <strong> LRU</strong> relies on the principle of temporal locality, excelling when recently accessed pages are likely to be accessed again.
                 <strong> FIFO</strong> replaces the oldest loaded page, making it computationally simple (O(1)) but susceptible to Belady's Anomaly where additional frames can yield more faults.
                 <strong> Clock (Second-Chance)</strong> uses a circular buffer and referenced bit to approximate LRU behavior with hardware-efficient O(1) pointer updates.
+                <strong> OPT (Belady)</strong> evicts the page whose next use is farthest in the future, achieving the theoretical minimum fault count for a given frame capacity; since it requires future knowledge, it is a benchmark against which practical policies are measured rather than a real OS strategy.
               </p>
             </div>
           </div>

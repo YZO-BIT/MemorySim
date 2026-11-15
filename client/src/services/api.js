@@ -39,7 +39,7 @@ export const api = {
     });
   },
 
-  // Compare LRU, FIFO, Clock on identical workload
+  // Compare LRU, FIFO, Clock, Optimal on identical workload
   compareAlgorithms: (params) => {
     return request("/simulation/compare", {
       method: "POST",

@@ -2,69 +2,45 @@ import React from "react";
 
 /**
  * StatsCards
- * Displays live counters and ratios calculated safely from current step or final run.
+ * Four compact live counters derived from the current step, or final metrics.
+ * Buffer layer (hits/misses) and virtual-memory layer (page faults) stay
+ * separate: page faults are never derived from buffer misses.
  */
 function StatsCards({ config = {}, metrics = {}, currentStep = null }) {
   const totalReq = currentStep ? currentStep.step : metrics.totalRequests || 0;
   const hits = currentStep ? currentStep.runningHits : metrics.bufferHits || 0;
-  const faults = currentStep ? currentStep.runningMisses : metrics.bufferMisses || 0;
-  const evictions = metrics.evictions ?? 0;
+  const misses = currentStep ? currentStep.runningMisses : metrics.bufferMisses || 0;
+  const stepFaults = currentStep ? currentStep.runningFaults ?? 0 : null;
+  const metricFaults = metrics.pageFaults ?? 0;
+  const faults = currentStep ? stepFaults : metricFaults;
 
   const hitRatio = totalReq > 0 ? ((hits / totalReq) * 100).toFixed(1) : "0.0";
   const faultRatio = totalReq > 0 ? ((faults / totalReq) * 100).toFixed(1) : "0.0";
 
-  const frames = config.bufferPoolSize || config.physicalFrames || 3;
-  const pageSize = config.pageSize || 4096;
-  const ramKb = ((frames * pageSize) / 1024).toFixed(0);
-
   const cards = [
     {
-      label: "Total References",
+      label: "Total Requests",
       value: totalReq,
       sub: `of ${config.totalRequests || totalReq} planned`,
-      color: "text-blue",
+      color: "text-white",
     },
     {
-      label: "Page Hits",
+      label: "Buffer Hits",
       value: hits,
-      sub: `${hitRatio}% Hit Ratio`,
+      sub: `${hitRatio}% hit ratio`,
       color: "text-green",
     },
     {
-      label: "Page Faults / Misses",
+      label: "Buffer Misses",
+      value: misses,
+      sub: "Required disk reads",
+      color: "text-amber",
+    },
+    {
+      label: "VM Page Faults",
       value: faults,
-      sub: `${faultRatio}% Fault Ratio`,
+      sub: `${faultRatio}% fault rate`,
       color: "text-red",
-    },
-    {
-      label: "Hit Ratio",
-      value: `${hitRatio}%`,
-      sub: "Hits / References",
-      color: "text-accent",
-    },
-    {
-      label: "RAM Capacity",
-      value: `${ramKb} KB`,
-      sub: `${frames} Frames × ${(pageSize / 1024).toFixed(0)} KB`,
-      color: "text-purple",
-    },
-    {
-      label: "Algorithm",
-      value: config.algorithm || "LRU",
-      sub: config.workloadType || "Random Pattern",
-      color: "text-yellow",
-    },
-    {
-      label: "Replacements / Evictions",
-      value: evictions,
-      sub: `${metrics.dirtyEvictions || 0} dirty writes`,
-      color: "text-muted",
-    },
-    {
-      label: "Disk I/O Reads",
-      value: metrics.diskReads || faults,
-      sub: `Exec Time: ${metrics.executionTimeMs ?? 0} ms`,
-      color: "text-muted",
     },
   ];
 

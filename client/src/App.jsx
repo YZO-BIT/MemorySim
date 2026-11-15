@@ -5,6 +5,30 @@ import Experiments from "./pages/Experiments";
 import AlgorithmComparison from "./components/AlgorithmComparison";
 import api from "./services/api";
 import { mockSimulation } from "./data/mockSimulation";
+import {
+  IconGrid,
+  IconPlus,
+  IconArchive,
+  IconCompare,
+  IconMenu,
+  IconCpu,
+  IconChevron,
+} from "./components/icons";
+
+const NAV_SECTIONS = [
+  {
+    label: "Workspace",
+    items: [
+      { id: "dashboard", label: "Overview", Icon: IconGrid },
+      { id: "simulation", label: "New Simulation", Icon: IconPlus },
+      { id: "experiments", label: "Experiments", Icon: IconArchive },
+    ],
+  },
+  {
+    label: "Simulation",
+    items: [{ id: "comparison", label: "Algorithm Comparison", Icon: IconCompare }],
+  },
+];
 
 function App() {
   const [page, setPage] = useState("dashboard");
@@ -12,8 +36,9 @@ function App() {
   const [isLiveResult, setIsLiveResult] = useState(false);
   const [engineOnline, setEngineOnline] = useState(false);
   const [lastConfig, setLastConfig] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Initialize engine status and initial live simulation
   useEffect(() => {
     let isMounted = true;
 
@@ -23,7 +48,6 @@ function App() {
         if (status.engineAvailable) {
           setEngineOnline(true);
 
-          // Run initial C++ simulation so the user is immediately greeted with real live engine results
           const initialPayload = {
             algorithm: "LRU",
             bufferPoolSize: 3,
@@ -33,6 +57,7 @@ function App() {
             workloadType: "Repeating Pattern",
             totalRequests: 8,
             requests: [1, 2, 3, 1, 4, 2, 5, 1],
+            writeRatio: 0,
           };
 
           api.runSimulation(initialPayload)
@@ -44,9 +69,7 @@ function App() {
                 setLastConfig(initialPayload);
               }
             })
-            .catch(() => {
-              // Gracefully fallback to mock preview
-            });
+            .catch(() => {});
         }
       })
       .catch(() => {
@@ -57,6 +80,11 @@ function App() {
       isMounted = false;
     };
   }, []);
+
+  const navigate = (next) => {
+    setPage(next);
+    setDrawerOpen(false);
+  };
 
   const handleSimulationComplete = (result) => {
     setSimulationData(result);
@@ -70,6 +98,8 @@ function App() {
         pageSize: result.config.pageSize,
         workloadType: result.config.workloadType,
         totalRequests: result.config.totalRequests,
+        seed: result.config.seed,
+        writeRatio: result.config.writeRatio,
         requests: result.sequence || [],
       });
     }
@@ -89,26 +119,44 @@ function App() {
     }
   };
 
-  const handleSelectExperiment = (exp) => {
-    const frames = exp.bufferSize || exp.physicalFrames || 3;
-    const config = {
-      algorithm: exp.algorithm || "LRU",
-      bufferPoolSize: frames,
-      virtualPages: exp.virtualFrames || 10,
-      physicalFrames: frames,
-      pageSize: exp.pageSize || 4096,
-      workloadType: exp.workloadType || "Random",
-      totalRequests: exp.totalRequests || 16,
-    };
-    api.runSimulation(config)
-      .then((res) => {
+  // Historical replay: load the experiment's stored configuration and its
+  // EXACT original reference sequence. Never silently generate a new
+  // workload for a historical record.
+  const handleSelectExperiment = async (exp) => {
+    try {
+      const detail = await api.getExperimentById(exp._id);
+      const record = detail?.data?.experiment || exp;
+      const frames = record.bufferSize || record.physicalFrames || 3;
+      const baseConfig = {
+        algorithm: record.algorithm || "LRU",
+        bufferPoolSize: frames,
+        virtualPages: record.virtualFrames || 10,
+        physicalFrames: frames,
+        pageSize: record.pageSize || 4096,
+        workloadType: record.workloadType || "Random",
+        totalRequests: record.totalRequests || 16,
+        seed: record.seed ?? 42,
+        writeRatio: record.writeRatio ?? 0,
+      };
+
+      const storedSequence = record.referenceSequence;
+      if (Array.isArray(storedSequence) && storedSequence.length > 0) {
+        const res = await api.runSimulation({
+          ...baseConfig,
+          requests: storedSequence,
+          totalRequests: storedSequence.length,
+        });
         if (res.success) {
           handleSimulationComplete(res);
+          return;
         }
-      })
-      .catch(() => {
-        setPage("simulation");
-      });
+      }
+      // No stored sequence: exact replay unavailable. Navigate to the
+      // simulation page so the user can configure it explicitly.
+      setPage("simulation");
+    } catch {
+      setPage("simulation");
+    }
   };
 
   const currentSimulation = simulationData || mockSimulation;
@@ -118,7 +166,7 @@ function App() {
       return (
         <Simulation
           onSimulationComplete={handleSimulationComplete}
-          onCancel={() => setPage("dashboard")}
+          onCancel={() => navigate("dashboard")}
         />
       );
     }
@@ -128,12 +176,12 @@ function App() {
         <div className="page">
           <div className="page-title">
             <div>
-              <h1>Algorithm Comparison Hub</h1>
-              <p>Compare LRU, FIFO, and Clock on identical workloads with C++ engine execution</p>
+              <h1>Algorithm Comparison</h1>
+              <p>
+                Compare LRU, FIFO, Clock and Optimal on identical workloads,
+                executed by the C++ engine.
+              </p>
             </div>
-            <button type="button" className="btn-secondary" onClick={() => setPage("dashboard")}>
-              ← Back to Dashboard
-            </button>
           </div>
           <AlgorithmComparison
             defaultSequence={currentSimulation?.sequence || [1, 2, 3, 1, 4, 2, 5, 1]}
@@ -152,84 +200,119 @@ function App() {
       <Dashboard
         simulation={currentSimulation}
         isLive={isLiveResult}
-        onNewSimulation={() => setPage("simulation")}
+        onNewSimulation={() => navigate("simulation")}
         onRestartSimulation={handleRestartSimulation}
-        onOpenComparison={() => setPage("comparison")}
+        onOpenComparison={() => navigate("comparison")}
       />
     );
   };
 
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="logo" onClick={() => setPage("dashboard")} style={{ cursor: "pointer" }}>
-          <div className="logo-icon">M</div>
+  const renderNavItems = (section) =>
+    section.items.map(({ id, label, Icon }) => {
+      const active = page === id;
+      return (
+        <button
+          key={id}
+          type="button"
+          className={`nav-item ${active ? "active" : ""}`}
+          data-label={label}
+          onClick={() => navigate(id)}
+          aria-current={active ? "page" : undefined}
+        >
+          <span className="nav-icon">
+            <Icon size={17} />
+          </span>
+          <span className="nav-text">{label}</span>
+        </button>
+      );
+    });
 
-          <div>
-            <strong>MemorySim</strong>
-            <span>Storage &amp; Memory Simulator</span>
-          </div>
+  const sidebar = (
+    <aside
+      className={`sidebar ${sidebarCollapsed ? "collapsed" : ""} ${drawerOpen ? "drawer-open" : ""}`}
+    >
+      <div className="sidebar-inner">
+        <div className="sidebar-head">
+          <button
+            type="button"
+            className="logo"
+            onClick={() => navigate("dashboard")}
+            data-label="MemorySim"
+          >
+            <span className="logo-mark">M</span>
+            <span className="logo-text">
+              <strong>MemorySim</strong>
+              <span>Memory Workstation</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-collapse"
+            onClick={() => setSidebarCollapsed((c) => !c)}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand" : "Collapse"}
+          >
+            <IconChevron size={15} />
+          </button>
         </div>
 
-        <nav>
-          <button
-            type="button"
-            className={page === "dashboard" ? "active" : ""}
-            onClick={() => setPage("dashboard")}
-          >
-            <span>▦</span>
-            Dashboard
-            {isLiveResult && (
-              <span className="sidebar-live-pill">LIVE</span>
-            )}
-          </button>
+        <nav className="sidebar-nav">
+          {NAV_SECTIONS.map((section) => (
+            <div className="nav-section" key={section.label}>
+              <span className="nav-section-label">{section.label}</span>
+              {renderNavItems(section)}
+            </div>
+          ))}
 
-          <button
-            type="button"
-            className={page === "simulation" ? "active" : ""}
-            onClick={() => setPage("simulation")}
-          >
-            <span>▶</span>
-            New Simulation
-          </button>
-
-          <button
-            type="button"
-            className={page === "comparison" ? "active" : ""}
-            onClick={() => setPage("comparison")}
-          >
-            <span>⚡</span>
-            Compare Policies
-          </button>
-
-          <button
-            type="button"
-            className={page === "experiments" ? "active" : ""}
-            onClick={() => setPage("experiments")}
-          >
-            <span>◫</span>
-            Experiment History
-          </button>
+          <div className="nav-section">
+            <span className="nav-section-label">System</span>
+            <div
+              className={`nav-item nav-static ${engineOnline ? "engine-ok" : "engine-off"}`}
+              data-label={engineOnline ? "Engine online" : "Engine standby"}
+            >
+              <span className="nav-icon">
+                <IconCpu size={17} />
+              </span>
+              <span className="nav-text engine-status-text">
+                <span className="engine-dot" />
+                {engineOnline ? "Engine Online" : "Engine Standby"}
+              </span>
+            </div>
+          </div>
         </nav>
 
-        <div className="sidebar-bottom">
-          <div className="system-info">
-            <span
-              className="online-dot"
-              style={{ background: engineOnline ? "#4ade80" : "#facc15" }}
-            ></span>
-            {engineOnline ? "C++ Engine Online" : "Engine Standby"}
-          </div>
-
-          <div className="version">
-            C++20 Simulation Core
-          </div>
+        <div className="sidebar-foot">
+          <span className="sidebar-version">C++20 Simulation Core</span>
         </div>
-      </aside>
+      </div>
+    </aside>
+  );
 
-      <main className="main-content">
-        {renderPage()}
-      </main>
+  return (
+    <div className={`app ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <header className="mobile-topbar">
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open navigation"
+        >
+          <IconMenu size={18} />
+        </button>
+        <span className="mobile-brand">MemorySim</span>
+      </header>
+
+      {sidebar}
+
+      {drawerOpen && (
+        <div
+          className="drawer-backdrop"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <main className="main-content">{renderPage()}</main>
     </div>
   );
 }

@@ -118,12 +118,26 @@ const seedDatabase = async () => {
       workloadType: "High Locality",
       totalRequests: 10,
 
+      // Reproducibility data
+      seed: 42,
+      writeRatio: 0,
+      referenceSequence: [0, 1, 2, 0, 1, 3, 0, 2, 4, 1],
+
+      // Percentages are stored consistently app-wide (0-100 scale)
       bufferHits: 4,
       bufferMisses: 6,
-      bufferHitRatio: 0.4,
+      bufferHitRatio: 40.0,
+      bufferDiskReads: 6,
+      bufferDiskWrites: 1,
+      bufferEvictions: 3,
+      bufferDirtyEvictions: 1,
 
       pageFaults: 6,
-      pageFaultRate: 0.6,
+      pageFaultRate: 60.0,
+      vmDiskReads: 6,
+      vmDiskWrites: 1,
+      vmEvictions: 3,
+      vmDirtyEvictions: 1,
 
       diskReads: 6,
       diskWrites: 1,
@@ -143,6 +157,7 @@ const seedDatabase = async () => {
     const events = [
       {
         experimentId: experiment._id,
+        stepNumber: 1,
         requestPage: 0,
         event: "PAGE_FAULT",
         bufferState: [0]
@@ -150,6 +165,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 1,
         requestPage: 0,
         event: "PAGE_LOAD",
         bufferState: [0]
@@ -157,6 +173,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 2,
         requestPage: 1,
         event: "PAGE_FAULT",
         bufferState: [0, 1]
@@ -164,6 +181,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 3,
         requestPage: 2,
         event: "PAGE_FAULT",
         bufferState: [0, 1, 2]
@@ -171,6 +189,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 4,
         requestPage: 0,
         event: "BUFFER_HIT",
         bufferState: [1, 2, 0]
@@ -178,6 +197,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 5,
         requestPage: 1,
         event: "BUFFER_HIT",
         bufferState: [2, 0, 1]
@@ -185,6 +205,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 6,
         requestPage: 3,
         event: "BUFFER_MISS",
         bufferState: [2, 0, 1]
@@ -192,13 +213,15 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 6,
         requestPage: 3,
         event: "PAGE_EVICT",
-        bufferState: [2, 0]
+        bufferState: [2, 0, 3]
       },
 
       {
         experimentId: experiment._id,
+        stepNumber: 6,
         requestPage: 3,
         event: "PAGE_LOAD",
         bufferState: [2, 0, 3]
@@ -206,6 +229,7 @@ const seedDatabase = async () => {
 
       {
         experimentId: experiment._id,
+        stepNumber: 7,
         requestPage: 4,
         event: "BUFFER_MISS",
         bufferState: [2, 0, 3]

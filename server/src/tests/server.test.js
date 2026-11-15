@@ -69,3 +69,52 @@ test("Simulator Service - Different algorithms yield correct victim metrics", as
   assert.strictEqual(lruRes.metrics.bufferHits, 1);
   assert.strictEqual(fifoRes.metrics.bufferHits, 2);
 });
+
+test("Simulator Service - seed 0 is forwarded without replacement", async () => {
+  const result = await executeSimulation({
+    algorithm: "LRU",
+    bufferPoolSize: 3,
+    virtualPages: 10,
+    physicalFrames: 3,
+    seed: 0,
+    requests: [1, 2, 3, 1],
+  });
+
+  assert.strictEqual(result.config.seed, 0);
+});
+
+test("Simulator Service - write ratio reaches the engine and produces writes", async () => {
+  const result = await executeSimulation({
+    algorithm: "LRU",
+    bufferPoolSize: 3,
+    virtualPages: 10,
+    physicalFrames: 3,
+    seed: 42,
+    writeRatio: 100,
+    requests: [1, 2, 3, 4],
+  });
+
+  assert.strictEqual(result.config.writeRatio, 100);
+  assert.strictEqual(result.metrics.writeRatio, 100);
+  assert.ok(result.steps.every((s) => s.isWrite === true));
+  assert.ok(result.metrics.bufferDiskWrites >= 1);
+  assert.strictEqual(result.metrics.diskReads, result.metrics.bufferDiskReads + result.metrics.vmDiskReads);
+});
+
+test("Simulator Service - generated workload matches backend generator (same seed)", async () => {
+  // Engine-side canonical generation must equal the backend Mulberry32
+  // implementation for identical seed and configuration.
+  const expected = generateWorkload({ type: "Random", totalRequests: 10, pageCount: 10, seed: 42 });
+  const result = await executeSimulation({
+    algorithm: "LRU",
+    bufferPoolSize: 3,
+    virtualPages: 10,
+    physicalFrames: 3,
+    workloadType: "Random",
+    totalRequests: 10,
+    seed: 42,
+  });
+
+  assert.strictEqual(result.config.totalRequests, 10);
+  assert.deepStrictEqual(result.sequence, expected);
+});

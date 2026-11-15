@@ -3,13 +3,13 @@
 #include "ReplacementPolicy.hpp"
 
 #include <list>
-#include <unordered_set>
-#include <functional>
+#include <unordered_map>
 
 class FIFO : public ReplacementPolicy {
 private:
     std::list<int> order;
-    std::unordered_set<int> present;
+
+    std::unordered_map<int, std::list<int>::iterator> position;
 
 public:
     void access(int frameId) override;

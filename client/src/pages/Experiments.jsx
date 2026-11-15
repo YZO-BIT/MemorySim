@@ -183,15 +183,21 @@ function Experiments({ onSelectExperiment }) {
                 <strong className="value">{selectedExperiment.totalRequests}</strong>
               </div>
               <div className="modal-item">
+                <span className="label">Write Ratio:</span>
+                <strong className="value">
+                  {selectedExperiment.writeRatio != null ? `${selectedExperiment.writeRatio}%` : "—"}
+                </strong>
+              </div>
+              <div className="modal-item">
                 <span className="label">Buffer Hits:</span>
                 <strong className="value text-green">{selectedExperiment.bufferHits}</strong>
               </div>
               <div className="modal-item">
-                <span className="label">Page Faults:</span>
+                <span className="label">Page Faults (VM):</span>
                 <strong className="value text-red">{selectedExperiment.pageFaults}</strong>
               </div>
               <div className="modal-item">
-                <span className="label">Hit Ratio:</span>
+                <span className="label">Buffer Hit Ratio:</span>
                 <strong className="value text-accent">
                   {Number(selectedExperiment.bufferHitRatio || 0).toFixed(2)}%
                 </strong>
@@ -208,6 +214,23 @@ function Experiments({ onSelectExperiment }) {
               </div>
             </div>
 
+            {!(
+              Array.isArray(selectedExperiment.referenceSequence) &&
+              selectedExperiment.referenceSequence.length > 0
+            ) && (
+              <div className="db-offline-banner" style={{ marginTop: "12px" }}>
+                <span className="info-icon">ⓘ</span>
+                <div>
+                  <strong>Exact Replay Unavailable:</strong>
+                  <p>
+                    This experiment predates reference-sequence storage, so the original
+                    page sequence cannot be restored. You can configure a similar run
+                    manually from the Simulation page.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="modal-footer">
               <button
                 type="button"
@@ -219,7 +242,10 @@ function Experiments({ onSelectExperiment }) {
                   setSelectedExperiment(null);
                 }}
               >
-                Load Experiment Parameters
+                {Array.isArray(selectedExperiment.referenceSequence) &&
+                selectedExperiment.referenceSequence.length > 0
+                  ? "Replay Experiment"
+                  : "Load Experiment Parameters"}
               </button>
             </div>
           </div>

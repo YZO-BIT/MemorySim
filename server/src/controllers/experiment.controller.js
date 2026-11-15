@@ -13,7 +13,12 @@ export const getExperiments = async (req, res) => {
   }
 
   try {
-    const experiments = await Experiment.find().sort({ createdAt: -1 }).limit(50);
+    // Exclude the stored reference sequence from the list view to keep the
+    // payload small; the detail endpoint (getExperimentById) returns it.
+    const experiments = await Experiment.find()
+      .select("-referenceSequence")
+      .sort({ createdAt: -1 })
+      .limit(50);
     return res.json({
       success: true,
       dbConnected: true,

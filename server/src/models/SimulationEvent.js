@@ -7,6 +7,9 @@ const SimulationEventSchema = new mongoose.Schema(
       ref: "Experiment",
     },
 
+    // Simulation step this event belongs to (1-based; null for legacy records)
+    stepNumber: Number,
+
     requestPage: Number,
 
     event: {

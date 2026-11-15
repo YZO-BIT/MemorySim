@@ -27,7 +27,7 @@ export function generateWorkload({
   const requests = [];
 
   if (normalizedType === "repeating" || normalizedType === "repeat" || normalizedType === "loop") {
-    const cycleLen = Math.max(2, Math.min(pages, 4));
+    const cycleLen = Math.max(1, Math.min(pages, 4));
     for (let i = 0; i < count; i++) {
       requests.push(i % cycleLen);
     }

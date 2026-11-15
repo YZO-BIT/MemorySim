@@ -43,7 +43,7 @@ function ReferenceHistoryTable({ steps = [], currentStepIndex = 0, onSelectStep 
             className={`filter-btn ${filter === "FAULTS" ? "active" : ""}`}
             onClick={() => setFilter("FAULTS")}
           >
-            Faults ({steps.filter((s) => s.result !== "HIT").length})
+            Misses ({steps.filter((s) => s.result !== "HIT").length})
           </button>
         </div>
       </div>
@@ -54,6 +54,7 @@ function ReferenceHistoryTable({ steps = [], currentStepIndex = 0, onSelectStep 
             <tr>
               <th style={{ width: "70px" }}>Step</th>
               <th>Requested Page</th>
+              <th>Access</th>
               <th>Result</th>
               <th>Frame</th>
               <th>Evicted Page</th>
@@ -74,7 +75,6 @@ function ReferenceHistoryTable({ steps = [], currentStepIndex = 0, onSelectStep 
                   className={`history-row ${isActive ? "history-row-active" : ""}`}
                   onClick={() => onSelectStep && onSelectStep(st.step)}
                   title={`Click to jump to Step ${st.step}`}
-                  style={{ cursor: "pointer" }}
                 >
                   <td>
                     <span className={`step-pill ${isActive ? "step-pill-active" : ""}`}>
@@ -87,8 +87,18 @@ function ReferenceHistoryTable({ steps = [], currentStepIndex = 0, onSelectStep 
                   </td>
 
                   <td>
+                    {st.isWrite === undefined ? (
+                      <span className="text-muted">—</span>
+                    ) : (
+                      <span className={st.isWrite ? "text-amber" : "text-muted"}>
+                        {st.isWrite ? "Write" : "Read"}
+                      </span>
+                    )}
+                  </td>
+
+                  <td>
                     <span className={`result-badge ${isHit ? "badge-success" : "badge-danger"}`}>
-                      {isHit ? "✓ HIT" : "⚠ FAULT"}
+                      {isHit ? "HIT" : "MISS"}
                     </span>
                   </td>
 
@@ -121,7 +131,7 @@ function ReferenceHistoryTable({ steps = [], currentStepIndex = 0, onSelectStep 
                         if (onSelectStep) onSelectStep(st.step);
                       }}
                     >
-                      {isActive ? "● Active" : "Jump →"}
+                      {isActive ? "Active" : "Jump"}
                     </button>
                   </td>
                 </tr>

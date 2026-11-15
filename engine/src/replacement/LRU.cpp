@@ -3,16 +3,24 @@
 void LRU::access(int frameId) {
     auto it = position.find(frameId);
 
+    if (it == position.end()) {
+        return;
+    }
+
+    order.erase(it->second);
+    order.push_back(frameId);
+    position[frameId] = std::prev(order.end());
+}
+
+void LRU::insert(int frameId) {
+    auto it = position.find(frameId);
+
     if (it != position.end()) {
         order.erase(it->second);
     }
 
     order.push_back(frameId);
     position[frameId] = std::prev(order.end());
-}
-
-void LRU::insert(int frameId) {
-    access(frameId);
 }
 
 void LRU::remove(int frameId) {
