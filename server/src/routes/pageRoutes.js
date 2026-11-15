@@ -51,7 +51,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/sync-state", async (req, res) => {
-  const { frames = [] } = req.body || {};
+  const { frames = [], dirtyPages = {} } = req.body || {};
 
   if (!isDbConnected()) {
     return res.json({ success: true, dbConnected: false });
@@ -65,7 +65,6 @@ router.post("/sync-state", async (req, res) => {
   }
 
   try {
-    // Clear current frame placement, leaving disk data and dirty status alone.
     await Page.updateMany(
       { pageType: "virtual" },
       { $set: { present: false, physicalFrame: -1 } }
@@ -80,6 +79,7 @@ router.post("/sync-state", async (req, res) => {
             $set: {
               present: true,
               physicalFrame: Number(frame.frameId),
+              dirty: Boolean(dirtyPages[Number(frame.pageId)]),
             },
             $setOnInsert: {
               pageId: Number(frame.pageId),

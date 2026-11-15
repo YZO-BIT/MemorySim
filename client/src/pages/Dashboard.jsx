@@ -93,16 +93,19 @@ function Dashboard({
   if (currentStepIndex <= 0 || steps.length < currentStepIndex) return;
 
   const step = steps[currentStepIndex - 1];
-  if (!Array.isArray(step.frames)) return;
+    if (!Array.isArray(step.frames)) return;
 
-  api.syncPageState({ frames: step.frames }).catch((error) => {
-    console.error("Could not sync simulation frame state:", error);
-  });
-}, [currentStepIndex, steps]);
+    api.syncPageState({
+      frames: step.frames,
+      dirtyPages: dirtyPagesMap,
+    }).catch((error) => {
+      console.error("Could not sync simulation frame state:", error);
+    });
+    }, [currentStepIndex, steps]);
 
-  const handleOpenModify = (frameId, pageId, currentData) => {
-    setModifyingTarget({ frameId, pageId });
-    setEditInput(pageDataMap[pageId] || currentData || `Customer #${pageId}: New Data`);
+    const handleOpenModify = (frameId, pageId, currentData) => {
+      setModifyingTarget({ frameId, pageId });
+      setEditInput(pageDataMap[pageId] || currentData || `Customer #${pageId}: New Data`);
   };
 
   const handleSaveModify = () => {
