@@ -13,9 +13,6 @@ add_executable(simulator
 
     src/buffer/BufferPoolManager.cpp
 
-    src/memory/PageTable.cpp
-    src/memory/VirtualMemoryManager.cpp
-
     src/replacement/LRU.cpp
     src/replacement/FIFO.cpp
     src/replacement/Clock.cpp

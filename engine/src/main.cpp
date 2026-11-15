@@ -8,7 +8,6 @@
 #include <algorithm>
 
 #include "buffer/BufferPoolManager.hpp"
-#include "memory/VirtualMemoryManager.hpp"
 #include "replacement/LRU.hpp"
 #include "replacement/FIFO.hpp"
 #include "replacement/Clock.hpp"
@@ -166,14 +165,6 @@ int main(int argc, char* argv[]) {
         &bufferMetrics
     );
 
-    MetricsCollector vmMetrics;
-    VirtualMemoryManager vm(
-        config.virtualPages,
-        config.physicalFrames,
-        createPolicy(config.algorithm),
-        &vmMetrics
-    );
-
     std::vector<EventItem> events;
     events.reserve(requests.size() * 3);
 
@@ -239,25 +230,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        bool wasInVm = vm.getPageTable().isPresent(page);
-        int vmFrame = vm.accessPage(page, false);
-
-        if (!wasInVm) {
-            events.push_back({
-                timeStr.str(),
-                "PAGE_FAULT",
-                "Virtual Page " + std::to_string(page) + " \xe2\x86\x92 Page Fault"
-            });
-
-            if (vmFrame != -1) {
-                events.push_back({
-                    timeStr.str(),
-                    "PAGE_LOAD",
-                    "Virtual Page " + std::to_string(page) + " \xe2\x86\x92 Physical Frame " + std::to_string(vmFrame)
-                });
-            }
-        }
-
         const auto& afterFrames = bufferPool.getFrames();
         std::vector<StepFrameSnapshot> frameSnapshots;
         frameSnapshots.reserve(afterFrames.size());
@@ -272,7 +244,8 @@ int main(int argc, char* argv[]) {
 
         int curTotal = static_cast<int>(step + 1);
         double curHitRatio = (static_cast<double>(runningHits) / curTotal) * 100.0;
-        double curFaultRate = (static_cast<double>(vmMetrics.getPageFaults()) / curTotal) * 100.0;
+        int curFaults = runningMisses;
+        double curFaultRate = (static_cast<double>(curFaults) / curTotal) * 100.0;
 
         stepRecords.push_back({
             static_cast<int>(step + 1),
@@ -283,7 +256,7 @@ int main(int argc, char* argv[]) {
             loadedPage,
             runningHits,
             runningMisses,
-            vmMetrics.getPageFaults(),
+            curFaults,
             curHitRatio,
             curFaultRate,
             frameSnapshots
@@ -324,26 +297,13 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "  ],\n";
 
-        std::cout << "  \"virtualMemory\": [\n";
-        const auto& pt = vm.getPageTable();
-        for (int p = 0; p < config.virtualPages; ++p) {
-            bool present = pt.isPresent(p);
-            int frame = pt.getFrame(p);
-            bool dirty = pt.isDirty(p);
-            std::cout << "    {\n"
-                      << "      \"virtualPage\": " << p << ",\n"
-                      << "      \"physicalFrame\": " << (present ? std::to_string(frame) : "null") << ",\n"
-                      << "      \"present\": " << (present ? "true" : "false") << ",\n"
-                      << "      \"dirty\": " << (dirty ? "true" : "false") << "\n"
-                      << "    }" << (p + 1 < config.virtualPages ? "," : "") << "\n";
-        }
-        std::cout << "  ],\n";
+        std::cout << "  \"virtualMemory\": [],\n";
 
         int totalReq = config.totalRequests;
         int bufHits = bufferMetrics.getBufferHits();
         int bufMisses = bufferMetrics.getBufferMisses();
         double hitRatio = totalReq > 0 ? (static_cast<double>(bufHits) / totalReq) * 100.0 : 0.0;
-        int pageFaults = vmMetrics.getPageFaults();
+        int pageFaults = bufMisses;
         double faultRate = totalReq > 0 ? (static_cast<double>(pageFaults) / totalReq) * 100.0 : 0.0;
 
         std::cout << "  \"metrics\": {\n"
@@ -354,10 +314,10 @@ int main(int argc, char* argv[]) {
                   << "    \"bufferHitRatio\": " << hitRatio << ",\n"
                   << "    \"pageFaults\": " << pageFaults << ",\n"
                   << "    \"pageFaultRate\": " << faultRate << ",\n"
-                  << "    \"diskReads\": " << (bufMisses + pageFaults) << ",\n"
-                  << "    \"diskWrites\": " << (bufferMetrics.getDiskWrites() + vmMetrics.getDiskWrites()) << ",\n"
-                  << "    \"evictions\": " << (bufferPool.getEvictions() + vmMetrics.getEvictions()) << ",\n"
-                  << "    \"dirtyEvictions\": " << (bufferMetrics.getDirtyEvictions() + vmMetrics.getDirtyEvictions()) << ",\n"
+                  << "    \"diskReads\": " << bufMisses << ",\n"
+                  << "    \"diskWrites\": " << bufferMetrics.getDiskWrites() << ",\n"
+                  << "    \"evictions\": " << bufferPool.getEvictions() << ",\n"
+                  << "    \"dirtyEvictions\": " << bufferMetrics.getDirtyEvictions() << ",\n"
                   << "    \"executionTimeMs\": " << executionTimeMs << "\n"
                   << "  },\n";
 
@@ -418,9 +378,9 @@ int main(int argc, char* argv[]) {
         std::cout << "Buffer Hit Ratio: " << std::fixed << std::setprecision(2)
                   << (bufferMetrics.getBufferHitRatio() * 100.0) << "%\n";
 
-        std::cout << "\nVirtual Memory Page Faults: " << vm.getPageFaults() << "\n";
-        std::cout << "Page Fault Rate: "
-                  << (vmMetrics.getPageFaultRate() * 100.0) << "%\n";
+        std::cout << "Disk Reads: " << bufferMetrics.getBufferMisses() << "\n";
+        std::cout << "Disk Writes: " << bufferMetrics.getDiskWrites() << "\n";
+        std::cout << "Dirty Evictions: " << bufferMetrics.getDirtyEvictions() << "\n";
         std::cout << "Execution Time: " << executionTimeMs << " ms\n";
     }
 
