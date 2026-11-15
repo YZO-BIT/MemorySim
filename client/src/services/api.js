@@ -64,7 +64,24 @@ export const api = {
       method: "DELETE",
     });
   },
-  
+
+    getPages: () => {
+    return request("/pages");
+  },
+
+  writebackPage: (payload) => {
+    return request("/pages/writeback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  resetDiskPages: () => {
+    return request("/pages/reset", {
+      method: "POST",
+    });
+  },
+
   getStatus: () => {
     return request("/status");
   },

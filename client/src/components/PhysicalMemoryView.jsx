@@ -5,6 +5,7 @@ function PhysicalMemoryView({
   currentStep = null,
   algorithm = "LRU",
   pageSize = 4096,
+  onModifyPage = null,
 }) {
   const affectedFrameId = currentStep ? currentStep.frame : -1;
   const isHit = currentStep?.result === "HIT";
@@ -57,43 +58,85 @@ function PhysicalMemoryView({
             <div
               key={frame.frameId}
               className={`frame-card ${isOccupied ? "frame-occupied" : "frame-empty"} ${highlightClass}`}
+              style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
             >
-              <div className="frame-card-header">
-                <span className="frame-label">Frame {frame.frameId}</span>
-                <span className={`status-pill ${isOccupied ? "pill-occupied" : "pill-available"}`}>
-                  {isOccupied ? "Occupied" : "Available"}
-                </span>
-              </div>
-
-              {actionBadge}
-
-              <div className="frame-content">
-                {isOccupied ? (
-                  <div className="page-slot page-active">
-                    <span className="page-prefix">Virtual Page</span>
-                    <strong className="page-id">Page {frame.pageId}</strong>
-                  </div>
-                ) : (
-                  <div className="page-slot page-vacant">
-                    <span className="vacant-icon">◌</span>
-                    <strong className="vacant-text">Empty</strong>
-                    <span className="vacant-sub">Slot Available</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="frame-meta">
-                <div className="meta-item">
-                  <span>State:</span>
-                  <span className={frame.dirty ? "meta-value text-amber" : "meta-value text-green"}>
-                    {frame.dirty ? "Dirty" : "Clean"}
+              <div>
+                <div className="frame-card-header">
+                  <span className="frame-label">Frame {frame.frameId}</span>
+                  <span className={`status-pill ${isOccupied ? "pill-occupied" : "pill-available"}`}>
+                    {isOccupied ? "Occupied" : "Available"}
                   </span>
                 </div>
 
-                <div className="meta-item">
-                  <span>Pin Count:</span>
-                  <span className="meta-value">{frame.pinCount ?? 0}</span>
+                {actionBadge}
+
+                <div className="frame-content">
+                  {isOccupied ? (
+                    <div className="page-slot page-active">
+                      <span className="page-prefix">Database Page</span>
+                      <strong className="page-id">Page {frame.pageId}</strong>
+                      {frame.data && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "var(--muted)",
+                            marginTop: "6px",
+                            background: "rgba(0,0,0,0.3)",
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          "{frame.data}"
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="page-slot page-vacant">
+                      <span className="vacant-icon">◌</span>
+                      <strong className="vacant-text">Empty</strong>
+                      <span className="vacant-sub">Slot Available</span>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div>
+                <div className="frame-meta">
+                  <div className="meta-item">
+                    <span>State:</span>
+                    <span className={frame.dirty ? "meta-value text-amber" : "meta-value text-green"}>
+                      {frame.dirty ? "● DIRTY" : "○ Clean"}
+                    </span>
+                  </div>
+
+                  <div className="meta-item">
+                    <span>Pin Count:</span>
+                    <span className="meta-value">{frame.pinCount ?? 0}</span>
+                  </div>
+                </div>
+
+                {isOccupied && onModifyPage && (
+                  <button
+                    type="button"
+                    onClick={() => onModifyPage(frame.frameId, frame.pageId, frame.data)}
+                    style={{
+                      width: "100%",
+                      marginTop: "10px",
+                      background: frame.dirty ? "rgba(245, 158, 11, 0.15)" : "rgba(94, 234, 212, 0.1)",
+                      border: `1px solid ${frame.dirty ? "#f59e0b" : "var(--accent)"}`,
+                      color: frame.dirty ? "#f59e0b" : "var(--accent)",
+                      borderRadius: "6px",
+                      padding: "6px 10px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "0.2s",
+                    }}
+                  >
+                    ✏️ {frame.dirty ? "Edit Dirty Page" : "Modify (Write in RAM)"}
+                  </button>
+                )}
               </div>
             </div>
           );
