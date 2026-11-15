@@ -65,10 +65,17 @@ export const api = {
     });
   },
 
-    getPages: () => {
+  getPages: () => {
     return request("/pages");
   },
 
+  syncPageState: (payload) => {
+    return request("/pages/sync-state", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  
   writebackPage: (payload) => {
     return request("/pages/writeback", {
       method: "POST",

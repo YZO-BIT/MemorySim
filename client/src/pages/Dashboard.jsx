@@ -33,6 +33,11 @@ function Dashboard({
   const [modifyingTarget, setModifyingTarget] = useState(null); 
   const [editInput, setEditInput] = useState("");
 
+  const dirtyPagesRef = React.useRef(dirtyPagesMap);
+  const pageDataRef = React.useRef(pageDataMap);
+  React.useEffect(() => { dirtyPagesRef.current = dirtyPagesMap; }, [dirtyPagesMap]);
+  React.useEffect(() => { pageDataRef.current = pageDataMap; }, [pageDataMap]);
+
   const [diskModalOpen, setDiskModalOpen] = useState(false);
   const [diskPages, setDiskPages] = useState([]);
   const [diskLoading, setDiskLoading] = useState(false);
@@ -82,7 +87,18 @@ function Dashboard({
         }
       }
     }
-  }, [currentStepIndex]);
+  }, [currentStepIndex, dirtyPagesMap, pageDataMap]);
+
+  useEffect(() => {
+  if (currentStepIndex <= 0 || steps.length < currentStepIndex) return;
+
+  const step = steps[currentStepIndex - 1];
+  if (!Array.isArray(step.frames)) return;
+
+  api.syncPageState({ frames: step.frames }).catch((error) => {
+    console.error("Could not sync simulation frame state:", error);
+  });
+}, [currentStepIndex, steps]);
 
   const handleOpenModify = (frameId, pageId, currentData) => {
     setModifyingTarget({ frameId, pageId });

@@ -50,6 +50,53 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.post("/sync-state", async (req, res) => {
+  const { frames = [] } = req.body || {};
+
+  if (!isDbConnected()) {
+    return res.json({ success: true, dbConnected: false });
+  }
+
+  if (!Array.isArray(frames)) {
+    return res.status(400).json({
+      success: false,
+      message: "frames must be an array.",
+    });
+  }
+
+  try {
+    // Clear current frame placement, leaving disk data and dirty status alone.
+    await Page.updateMany(
+      { pageType: "virtual" },
+      { $set: { present: false, physicalFrame: -1 } }
+    );
+
+    const updates = frames
+      .filter((frame) => frame.pageId !== null && frame.pageId !== undefined)
+      .map((frame) =>
+        Page.updateOne(
+          { pageId: Number(frame.pageId), pageType: "virtual" },
+          {
+            $set: {
+              present: true,
+              physicalFrame: Number(frame.frameId),
+            },
+            $setOnInsert: {
+              pageId: Number(frame.pageId),
+              pageType: "virtual",
+            },
+          },
+          { upsert: true }
+        )
+      );
+
+    await Promise.all(updates);
+    res.json({ success: true, dbConnected: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.post("/writeback", async (req, res) => {
   const { pageId, data } = req.body;
   const numId = parseInt(pageId, 10);
